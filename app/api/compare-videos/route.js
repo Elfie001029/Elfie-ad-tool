@@ -42,29 +42,91 @@ GROUP B = Competitor ads
 
 ${context ? `Context: ${context}` : ''}
 
-Your job is to do a gap analysis — identify what Group A is missing compared to Group B.
+Watch all videos carefully. Then return your response as a valid JSON object with EXACTLY this structure. No markdown, no backticks, no explanation — just raw JSON:
 
-After watching all videos, analyze the following dimensions:
-
-1) HOOK STRATEGY — How does each group open their ads? What is Group A missing in the first 3 seconds?
-
-2) PACING & EDITING — Compare cut rates and editing rhythm. Is Group A faster/slower? What's the impact?
-
-3) PRODUCT REVEAL TIMING — When does each group show the product? What is Group A doing differently?
-
-4) BRAND NAME REVEAL — When and how does each group introduce the brand? What could Group A improve?
-
-5) SOCIAL PROOF & TRUST SIGNALS — What credibility tactics does Group B use that Group A lacks?
-
-6) EMOTIONAL ARC — How does the emotional journey differ between the two groups?
-
-7) CTA STRUCTURE — How does Group B earn the click differently from Group A?
-
-8) TOP 3 GAPS — The most important things Group A should immediately add or change based on what Group B is doing.
-
-Be specific — reference actual moments and visuals from the videos. Be direct and actionable.
-
-Here are the videos:`
+{
+  "trends": {
+    "product_reveal": {
+      "competitor_average": "average timestamp across all GROUP B videos e.g. 00:00:08",
+      "my_average": "average timestamp across all GROUP A videos e.g. 00:00:15",
+      "insight": "one sentence insight about what this difference means"
+    },
+    "brand_reveal": {
+      "competitor_average": "average timestamp across all GROUP B videos",
+      "my_average": "average timestamp across all GROUP A videos",
+      "insight": "one sentence insight about what this difference means"
+    },
+    "attention_words": [
+      "word or short phrase 1",
+      "word or short phrase 2",
+      "word or short phrase 3",
+      "word or short phrase 4",
+      "word or short phrase 5"
+    ],
+    "structural_pattern": "2-3 sentences describing the most common narrative structure used across GROUP B competitor ads"
+  },
+  "gaps": [
+    {
+      "dimension": "Hook strategy",
+      "competitor": "What GROUP B is doing in this dimension",
+      "mine": "What GROUP A is doing in this dimension",
+      "gap": "The specific thing GROUP A is missing or should change"
+    },
+    {
+      "dimension": "Pacing & editing",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    },
+    {
+      "dimension": "Product reveal timing",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    },
+    {
+      "dimension": "Brand name reveal",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    },
+    {
+      "dimension": "Social proof & trust signals",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    },
+    {
+      "dimension": "Emotional arc",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    },
+    {
+      "dimension": "CTA structure",
+      "competitor": "What GROUP B is doing",
+      "mine": "What GROUP A is doing",
+      "gap": "The specific gap"
+    }
+  ],
+  "top3": [
+    {
+      "priority": 1,
+      "title": "Short title for this gap",
+      "action": "Specific actionable thing GROUP A should do immediately"
+    },
+    {
+      "priority": 2,
+      "title": "Short title for this gap",
+      "action": "Specific actionable thing GROUP A should do immediately"
+    },
+    {
+      "priority": 3,
+      "title": "Short title for this gap",
+      "action": "Specific actionable thing GROUP A should do immediately"
+    }
+  ]
+}`
     });
 
     parts.push({ text: `--- GROUP A: MY ADS (${myVideoData.length} video${myVideoData.length > 1 ? 's' : ''}) ---` });
@@ -86,9 +148,21 @@ Here are the videos:`
       contents: [{ role: 'user', parts }]
     });
 
-    const result = response.text;
+    const raw = response.text;
+    console.log('RAW RESPONSE:', raw.slice(0, 500));
 
-    return new Response(JSON.stringify({ result }), { status: 200 });
+    let parsed = null;
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(clean);
+    } catch(e) {
+      console.log('JSON parse failed:', e.message);
+    }
+
+    return new Response(JSON.stringify({
+      result: parsed,
+      raw,
+    }), { status: 200 });
 
   } catch (err) {
     console.error('Comparison error:', err);

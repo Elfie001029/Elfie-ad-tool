@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 
 export async function POST(request) {
@@ -37,25 +36,46 @@ export async function POST(request) {
             {
               text: `You are a senior creative strategist specializing in DTC paid social video ads.
 
-Analyze this video ad in detail. Ad context: ${adContext || 'DTC video ad'}
+Analyze this video ad. Ad context: ${adContext || 'DTC video ad'}
 
-Provide a structured analysis covering:
+Return your response as a valid JSON object with EXACTLY this structure. No markdown, no backticks, no explanation — just raw JSON:
 
-1) HOOK STRATEGY — What happens in the first 3 seconds? Why does it stop the scroll?
+{
+  "general": {
+    "hook": {
+      "summary": "One sentence describing the hook",
+      "psychology": "The psychological principle being used and why it works to stop the scroll"
+    },
+    "opener": {
+      "description": "What happens in the opening seconds",
+      "product_relationship": "How the opener connects to the product being sold"
+    },
+    "brand_reveal": {
+      "timestamp": "00:00:00",
+      "description": "How and when the brand name is introduced"
+    },
+    "product_reveal": {
+      "timestamp": "00:00:00",
+      "description": "How and when the product is first shown"
+    },
+    "structure": "2-3 sentences describing the overall narrative arc of the ad",
+    "cta": {
+      "timestamp": "00:00:00",
+      "text": "The actual CTA text or message shown",
+      "strategy": "Why this CTA works and how it is framed"
+    }
+  },
+  "timeline": [
+    {
+      "timestamp": "00:00:00",
+      "type": "talking_head",
+      "visual": "What is on screen at this moment",
+      "copy": "What is being said or shown as text"
+    }
+  ]
+}
 
-2) PACING & EDITING — How many cuts approximately? What does the editing rhythm tell us about the emotional strategy?
-
-3) TALKING HEAD vs B-ROLL — Estimate the ratio. How do they work together to build trust and desire?
-
-4) TRUST-BUILDING STRUCTURE — How is credibility established? What visual and verbal signals build confidence?
-
-5) COPY & MESSAGING ANGLE — What is the core emotional trigger? What problem or desire is being addressed?
-
-6) CTA STRATEGY — How does the ad earn the click? What is the offer and how is it framed?
-
-7) THREE THINGS TO STEAL — The most specific, actionable takeaways a competitor DTC brand could use immediately.
-
-Be specific — reference actual moments, visuals, and lines from the video in your analysis.`
+For the timeline array, include one entry for every cut or scene change in the video. Use these types: talking_head, broll, text_overlay, product_shot, logo. If there is no copy/speech at a moment use an empty string for copy.`
             }
           ]
         }
@@ -64,16 +84,18 @@ Be specific — reference actual moments, visuals, and lines from the video in y
 
     const geminiAnalysis = response.text;
 
-  return new Response(JSON.stringify({
-  analysis: geminiAnalysis,
-  stats: {
-    duration: 'See analysis',
-    totalCuts: null,
-    talkingHeadPercent: null,
-    brollPercent: null,
-    hookType: 'See analysis',
-  },
-}), { status: 200 });
+    let parsed = null;
+    try {
+      const clean = geminiAnalysis.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(clean);
+    } catch(e) {
+      console.log('JSON parse failed, returning raw:', e.message);
+    }
+
+    return new Response(JSON.stringify({
+      analysis: parsed,
+      raw: geminiAnalysis,
+    }), { status: 200 });
 
   } catch (err) {
     console.error('Video analysis error:', err);
