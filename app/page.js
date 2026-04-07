@@ -120,7 +120,7 @@ export default function Home() {
                 value={url}
                 onChange={e => updateVideo(side, i, e.target.value)}
                 placeholder="https://file.swipekit.app/fb-xxx.mp4"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono bg-white focus:outline-none focus:border-gray-400"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-400"
               />
               {videos.length > 1 && (
                 <button onClick={() => removeVideo(side, i)} className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0">×</button>
@@ -138,50 +138,54 @@ export default function Home() {
   }
 
   function GeneralAnalysis({ data }) {
-    if (!data) return null;
-    const g = data;
-    return (
-      <div className="flex flex-col gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Hook analysis</p>
-          <p className="text-sm font-medium text-gray-900 mb-1">{g.hook?.summary}</p>
-          <p className="text-sm text-gray-500 leading-relaxed">{g.hook?.psychology}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Opener</p>
-          <p className="text-sm text-gray-900 mb-2 leading-relaxed">{g.opener?.description}</p>
-          <div className="bg-gray-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-gray-400 mb-1">Product relationship</p>
-            <p className="text-sm text-gray-600">{g.opener?.product_relationship}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Brand reveal</p>
-            <p className="text-2xl font-medium text-gray-900 mb-1">{g.brand_reveal?.timestamp}</p>
-            <p className="text-xs text-gray-500 leading-relaxed">{g.brand_reveal?.description}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Product reveal</p>
-            <p className="text-2xl font-medium text-gray-900 mb-1">{g.product_reveal?.timestamp}</p>
-            <p className="text-xs text-gray-500 leading-relaxed">{g.product_reveal?.description}</p>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Ad structure</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{g.structure}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded">{g.cta?.timestamp}</span>
-            <span className="text-sm font-medium text-gray-900">"{g.cta?.text}"</span>
-          </div>
-          <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
+  if (!data) return null;
+  const g = data;
+  return (
+    <div className="flex flex-col gap-3">
+
+      {/* Opener */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Opener</p>
+        <p className="text-sm text-gray-900 mb-2 leading-relaxed">{g.opener?.description}</p>
+        <div className="bg-gray-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-gray-400 mb-1">Product relationship</p>
+          <p className="text-sm text-gray-600">{g.opener?.product_relationship}</p>
         </div>
       </div>
-    );
-  }
+
+      {/* Timestamps grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Brand reveal</p>
+          <p className="text-2xl font-medium text-gray-900 mb-1">{g.brand_reveal?.timestamp}</p>
+          <p className="text-xs text-gray-500 leading-relaxed">{g.brand_reveal?.description}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Product reveal</p>
+          <p className="text-2xl font-medium text-gray-900 mb-1">{g.product_reveal?.timestamp}</p>
+          <p className="text-xs text-gray-500 leading-relaxed">{g.product_reveal?.description}</p>
+        </div>
+      </div>
+
+      {/* Structure */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Ad structure</p>
+        <p className="text-sm text-gray-700 leading-relaxed">{g.structure}</p>
+      </div>
+
+      {/* CTA */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded">{g.cta?.timestamp}</span>
+          <span className="text-sm font-medium text-gray-900">"{g.cta?.text}"</span>
+        </div>
+        <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
+      </div>
+
+    </div>
+  );
+}
 
   function Timeline({ data }) {
     if (!data?.length) return null;
@@ -254,7 +258,6 @@ export default function Home() {
             <p className="text-xs text-gray-500 leading-relaxed">{data.brand_reveal?.insight}</p>
           </div>
         </div>
-
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Top attention words</p>
           <div className="flex flex-wrap gap-2">
@@ -263,7 +266,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Competitor structural pattern</p>
           <p className="text-sm text-gray-700 leading-relaxed">{data.structural_pattern}</p>
@@ -363,7 +365,7 @@ export default function Home() {
                   value={videoUrl}
                   onChange={e => setVideoUrl(e.target.value)}
                   placeholder="https://file.swipekit.app/fb-xxx.mp4"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-gray-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-gray-900 focus:outline-none focus:border-gray-400"
                 />
               </div>
               <div className="mb-4">
@@ -373,7 +375,7 @@ export default function Home() {
                   value={videoContext}
                   onChange={e => setVideoContext(e.target.value)}
                   placeholder="e.g. Hims hair loss ad targeting men 30-45"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-gray-400"
                 />
               </div>
               <button
@@ -387,25 +389,51 @@ export default function Home() {
             </div>
 
             {videoAnalysis && (
-              <>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                    <p className="text-xs text-gray-400 mb-1">Total cuts</p>
-                    <p className="text-xl font-medium text-gray-900">{videoAnalysis.timeline?.length ?? '—'}</p>
-                  </div>
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                    <p className="text-xs text-gray-400 mb-1">Brand reveal</p>
-                    <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.brand_reveal?.timestamp ?? '—'}</p>
-                  </div>
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                    <p className="text-xs text-gray-400 mb-1">Product reveal</p>
-                    <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.product_reveal?.timestamp ?? '—'}</p>
-                  </div>
-                </div>
-                <GeneralAnalysis data={videoAnalysis.general} />
-                <Timeline data={videoAnalysis.timeline} />
-              </>
-            )}
+  <>
+    {/* Video player */}
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <video
+        src={videoUrl}
+        controls
+        className="w-full"
+        style={{ maxHeight: '400px' }}
+      />
+    </div>
+
+    {/* Hook hero */}
+    <div className="bg-gray-900 rounded-xl p-6">
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Hook</p>
+      <p className="text-2xl font-medium text-white leading-snug mb-4">
+        {videoAnalysis.general?.hook?.summary}
+      </p>
+      <p className="text-sm text-gray-400 leading-relaxed">
+        {videoAnalysis.general?.hook?.psychology}
+      </p>
+    </div>
+
+    {/* Stats row */}
+    <div className="grid grid-cols-3 gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <p className="text-xs text-gray-400 mb-1">Total cuts</p>
+        <p className="text-xl font-medium text-gray-900">{videoAnalysis.timeline?.length ?? '—'}</p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <p className="text-xs text-gray-400 mb-1">Brand reveal</p>
+        <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.brand_reveal?.timestamp ?? '—'}</p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <p className="text-xs text-gray-400 mb-1">Product reveal</p>
+        <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.product_reveal?.timestamp ?? '—'}</p>
+      </div>
+    </div>
+
+    {/* General analysis — hook removed since it's now the hero */}
+    <GeneralAnalysis data={videoAnalysis.general} />
+
+    {/* Timeline */}
+    <Timeline data={videoAnalysis.timeline} />
+  </>
+)}
           </div>
         )}
 
@@ -428,7 +456,7 @@ export default function Home() {
                   value={compareContext}
                   onChange={e => setCompareContext(e.target.value)}
                   placeholder="e.g. Both are DTC weight loss brands targeting women 25-40"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-gray-400"
                 />
               </div>
               <button
@@ -448,13 +476,11 @@ export default function Home() {
                   <p className="text-xs text-gray-400">Patterns across all competitor ads</p>
                 </div>
                 <TrendsSection data={compareResult.trends} />
-
                 <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Gap analysis</p>
                   <p className="text-xs text-gray-400">What your ads are missing vs competitors</p>
                 </div>
                 <GapsSection data={compareResult.gaps} />
-
                 <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Top 3 priorities</p>
                   <p className="text-xs text-gray-400">The most important things to fix first</p>
