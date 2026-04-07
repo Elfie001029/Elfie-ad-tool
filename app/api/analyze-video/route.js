@@ -22,7 +22,7 @@ export async function POST(request) {
     console.log('Video fetched, sending to Gemini...');
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: [
         {
           role: 'user',
@@ -43,12 +43,12 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
 {
   "general": {
     "hook": {
-      "summary": "The exact words spoken or shown on screen in the first 3 seconds of the video",
-      "psychology": "The psychological principle being used and why it works to stop the scroll"
+      "copy": "The exact words spoken or shown on screen in the first 3 seconds of the video",
+      "visual": "What is visually happening in the first 3 seconds"
     },
     "opener": {
-      "description": "What happens in the opening seconds",
-      "product_relationship": "How the opener connects to the product being sold"
+      "description": "What happens in the opening seconds visually",
+      "timestamp": "00:00:00"
     },
     "brand_reveal": {
       "timestamp": "00:00:00",
@@ -58,51 +58,63 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "timestamp": "00:00:00",
       "description": "How and when the product is first shown"
     },
-    "structure": "2-3 sentences describing the overall narrative arc of the ad",
+    "duration": "Total video duration as a timestamp e.g. 00:00:45",
     "cta": {
       "timestamp": "00:00:00",
-      "text": "The actual CTA text or message shown",
-      "strategy": "Why this CTA works and how it is framed"
-    }
-
+      "text": "The actual CTA text or message shown"
+    },
+    "value_propositions": [
+      "First VP mentioned e.g. clinically proven",
+      "Second VP mentioned e.g. free shipping",
+      "Third VP mentioned e.g. doctor-approved"
+    ],
+    "talent": {
+      "appearance": "Physical description e.g. woman in her late 30s, natural makeup, brown hair",
+      "clothing": "What they are wearing e.g. casual white t-shirt, no jewelry",
+      "setting": "Where they are e.g. bright minimal bathroom, natural window light",
+      "energy": "How they come across e.g. warm and relatable, slightly vulnerable, direct eye contact"
+    },
+    "ad_structure": [
+      {
+        "section": "Use only: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
+        "start": "00:00:00",
+        "end": "00:00:05"
+      }
+    ],
     "text_treatment": {
-  "font_style": "Description of font style used e.g. bold sans-serif, script, all caps",
-  "text_size": "How text size is used e.g. large supers, small captions",
-  "color_contrast": "How color contrast is used for text e.g. white text on dark background",
-  "motion": "Whether text animates or is static",
-  "captions": "Whether captions are used and how they are styled"
-},
-"duration": "Total video duration as a timestamp e.g. 00:00:45",
-"ad_structure": [
-  {
-    "section": "Name of this section. Use only these options: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
-    "start": "start timestamp of this section e.g. 00:00:00",
-    "end": "end timestamp of this section e.g. 00:00:05",
-    "color": "assign one of these colors based on section type: blue for Hook, orange for Opener, pink for Personal story, red for Pain point, yellow for Competitor mention, purple for Scientific facts, green for Product introduction, teal for Social proof, amber for Price or offer, gray for CTA"
-  }
-]
-  "talent": {
-  "type": "One of: talking_head, voiceover, ugc_creator, actor, animation, text_only",
-  "apparent_age": "Estimated age range e.g. 25-35",
-  "apparent_gender": "e.g. female, male, non-binary, mixed",
-  "presentation_style": "e.g. casual at home, professional setting, outdoor lifestyle, clinical/authority",
-  "speaks_directly_to_camera": true,
-  "emotional_tone": "e.g. relatable and conversational, authoritative, excited, vulnerable and honest",
-  "target_audience_signal": "What audience this talent is designed to attract e.g. women 35-50 experiencing perimenopause, young men interested in fitness"
-}
-
+      "font_style": "e.g. bold sans-serif, script, all caps",
+      "text_size": "e.g. large supers, small captions",
+      "color_contrast": "e.g. white text on dark background",
+      "motion": "e.g. animates in, static, fade",
+      "captions": "e.g. auto-captions in white, styled captions with highlight words"
+    }
   },
   "timeline": [
     {
       "timestamp": "00:00:00",
       "type": "talking_head",
       "visual": "What is on screen at this moment",
-      "copy": "What is being said or shown as text"
+      "copy": "Exact words spoken or shown as text, empty string if silent"
     }
+  ],
+  "copy_only": [
+    {
+      "timestamp": "00:00:00",
+      "text": "Exact words spoken or shown on screen at this moment"
+    }
+  ],
+  "transferrable_copy": [
+    {
+      "original": "The exact original line from the video",
+      "template": "The reusable format e.g. [target audience] need to try [product name]"
+    }
+  ],
+  "broll_shots": [
+    "Short production direction e.g. Woman holding product in good lighting against clean background",
+    "Short production direction e.g. Close-up of product packaging on marble surface",
+    "Short production direction e.g. Person looking at hair in bathroom mirror, natural light"
   ]
-}
-
-For the timeline array, include one entry for every cut or scene change in the video. Use these types: talking_head, broll, text_overlay, product_shot, logo. If there is no copy/speech at a moment use an empty string for copy.`
+}`
             }
           ]
         }

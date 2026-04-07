@@ -18,16 +18,16 @@ const TYPE_COLORS = {
 };
 
 const SECTION_COLORS = {
-  'Hook': { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700' },
-  'Opener': { bg: 'bg-orange-400', light: 'bg-orange-50', text: 'text-orange-700' },
-  'Personal story': { bg: 'bg-pink-400', light: 'bg-pink-50', text: 'text-pink-700' },
-  'Pain point': { bg: 'bg-red-500', light: 'bg-red-50', text: 'text-red-700' },
-  'Competitor mention': { bg: 'bg-yellow-400', light: 'bg-yellow-50', text: 'text-yellow-700' },
-  'Scientific facts': { bg: 'bg-purple-500', light: 'bg-purple-50', text: 'text-purple-700' },
-  'Product introduction': { bg: 'bg-green-500', light: 'bg-green-50', text: 'text-green-700' },
-  'Social proof': { bg: 'bg-teal-500', light: 'bg-teal-50', text: 'text-teal-700' },
-  'Price or offer': { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700' },
-  'CTA': { bg: 'bg-gray-500', light: 'bg-gray-50', text: 'text-gray-700' },
+  'Hook': { bg: '#3b82f6', light: 'bg-blue-50', text: 'text-blue-700' },
+  'Opener': { bg: '#f97316', light: 'bg-orange-50', text: 'text-orange-700' },
+  'Personal story': { bg: '#ec4899', light: 'bg-pink-50', text: 'text-pink-700' },
+  'Pain point': { bg: '#ef4444', light: 'bg-red-50', text: 'text-red-700' },
+  'Competitor mention': { bg: '#eab308', light: 'bg-yellow-50', text: 'text-yellow-700' },
+  'Scientific facts': { bg: '#a855f7', light: 'bg-purple-50', text: 'text-purple-700' },
+  'Product introduction': { bg: '#22c55e', light: 'bg-green-50', text: 'text-green-700' },
+  'Social proof': { bg: '#14b8a6', light: 'bg-teal-50', text: 'text-teal-700' },
+  'Price or offer': { bg: '#f59e0b', light: 'bg-amber-50', text: 'text-amber-700' },
+  'CTA': { bg: '#6b7280', light: 'bg-gray-50', text: 'text-gray-700' },
 };
 
 function timestampToSeconds(ts) {
@@ -40,6 +40,7 @@ function timestampToSeconds(ts) {
 
 export default function Home() {
   const [mode, setMode] = useState('single');
+  const [activeTab, setActiveTab] = useState('analysis');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoContext, setVideoContext] = useState('');
   const [videoAnalysis, setVideoAnalysis] = useState(null);
@@ -59,6 +60,7 @@ export default function Home() {
     setVideoError('');
     setAnalyzingVideo(true);
     setVideoAnalysis(null);
+    setActiveTab('analysis');
     try {
       const res = await fetch('/api/analyze-video', {
         method: 'POST',
@@ -79,7 +81,6 @@ export default function Home() {
     if (videoRef.current) {
       videoRef.current.currentTime = timestampToSeconds(ts);
       videoRef.current.play();
-      videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
@@ -134,84 +135,94 @@ export default function Home() {
     }
   }
 
-  function AdStructureTimeline({ data, duration }) {
+  function AdStructureBar({ data, duration, brandReveal, productReveal }) {
     if (!data?.length) return null;
     const totalSeconds = timestampToSeconds(duration) || 60;
+    const brandPct = (timestampToSeconds(brandReveal) / totalSeconds) * 100;
+    const productPct = (timestampToSeconds(productReveal) / totalSeconds) * 100;
 
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Ad structure</p>
-        <div className="relative">
-          <div className="flex h-10 rounded-lg overflow-hidden mb-3 gap-px">
-            {data.map((section, i) => {
-              const start = timestampToSeconds(section.start);
-              const end = timestampToSeconds(section.end);
-              const width = ((end - start) / totalSeconds) * 100;
-              const colors = SECTION_COLORS[section.section] || { bg: 'bg-gray-400' };
-              return (
-                <button
-                  key={i}
-                  onClick={() => jumpToTimestamp(section.start)}
-                  className={`${colors.bg} hover:opacity-80 transition-opacity flex items-center justify-center`}
-                  style={{ width: `${width}%`, minWidth: '2px' }}
-                  title={`${section.section} (${section.start} - ${section.end})`}
-                />
-              );
-            })}
-          </div>
-          <div className="flex gap-px mb-4">
-            {data.map((section, i) => {
-              const start = timestampToSeconds(section.start);
-              const end = timestampToSeconds(section.end);
-              const width = ((end - start) / totalSeconds) * 100;
-              return (
-                <div key={i} style={{ width: `${width}%`, minWidth: '2px' }}>
-                  <p className="text-xs text-gray-400 font-mono truncate">{section.start}</p>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {data.map((section, i) => {
-              const colors = SECTION_COLORS[section.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: 'bg-gray-400' };
-              return (
-                <button
-                  key={i}
-                  onClick={() => jumpToTimestamp(section.start)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${colors.light} hover:opacity-80 transition-opacity`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${colors.bg} flex-shrink-0`} />
-                  <span className={`text-xs font-medium ${colors.text}`}>{section.section}</span>
-                  <span className="text-xs text-gray-400 font-mono">{section.start}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  function TalentCard({ data }) {
-    if (!data) return null;
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
-        <div className="flex flex-col gap-2">
-          {[
-            { label: 'Type', value: data.type?.replace(/_/g, ' ') },
-            { label: 'Age range', value: data.apparent_age },
-            { label: 'Gender', value: data.apparent_gender },
-            { label: 'Presentation', value: data.presentation_style },
-            { label: 'Speaks to camera', value: data.speaks_directly_to_camera ? 'Yes' : 'No' },
-            { label: 'Tone', value: data.emotional_tone },
-            { label: 'Target audience', value: data.target_audience_signal },
-          ].map(item => item.value ? (
-            <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-              <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
-              <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+        {/* Tick marks above bar */}
+        <div className="relative mb-1" style={{ height: '20px' }}>
+          {brandReveal && (
+            <div className="absolute flex flex-col items-center" style={{ left: `${brandPct}%`, transform: 'translateX(-50%)' }}>
+              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">brand</span>
             </div>
-          ) : null)}
+          )}
+          {productReveal && Math.abs(productPct - brandPct) > 5 && (
+            <div className="absolute flex flex-col items-center" style={{ left: `${productPct}%`, transform: 'translateX(-50%)' }}>
+              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">product</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bar with tick lines */}
+        <div className="relative h-10 flex rounded-lg overflow-hidden mb-1 gap-px">
+          {data.map((section, i) => {
+            const start = timestampToSeconds(section.start);
+            const end = timestampToSeconds(section.end);
+            const width = ((end - start) / totalSeconds) * 100;
+            const color = SECTION_COLORS[section.section]?.bg || '#6b7280';
+            return (
+              <button
+                key={i}
+                onClick={() => jumpToTimestamp(section.start)}
+                style={{ width: `${Math.max(width, 1)}%`, backgroundColor: color }}
+                className="hover:opacity-75 transition-opacity relative"
+                title={`${section.section} (${section.start})`}
+              />
+            );
+          })}
+
+          {/* Brand reveal tick */}
+          {brandReveal && (
+            <div
+              className="absolute top-0 bottom-0 w-px bg-white opacity-90 pointer-events-none"
+              style={{ left: `${brandPct}%` }}
+            />
+          )}
+          {/* Product reveal tick */}
+          {productReveal && (
+            <div
+              className="absolute top-0 bottom-0 w-px bg-white opacity-90 pointer-events-none"
+              style={{ left: `${productPct}%` }}
+            />
+          )}
+        </div>
+
+        {/* Timestamps below bar */}
+        <div className="relative h-5 mb-4">
+          {brandReveal && (
+            <div className="absolute" style={{ left: `${brandPct}%`, transform: 'translateX(-50%)' }}>
+              <span className="text-xs font-mono text-gray-400">{brandReveal}</span>
+            </div>
+          )}
+          {productReveal && Math.abs(productPct - brandPct) > 5 && (
+            <div className="absolute" style={{ left: `${productPct}%`, transform: 'translateX(-50%)' }}>
+              <span className="text-xs font-mono text-gray-400">{productReveal}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-2">
+          {data.map((section, i) => {
+            const colors = SECTION_COLORS[section.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: '#6b7280' };
+            return (
+              <button
+                key={i}
+                onClick={() => jumpToTimestamp(section.start)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${colors.light} hover:opacity-80 transition-opacity`}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: colors.bg }} />
+                <span className={`text-xs font-medium ${colors.text}`}>{section.section}</span>
+                <span className="text-xs text-gray-400 font-mono">{section.start}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -246,112 +257,6 @@ export default function Home() {
             + Add video
           </button>
         )}
-      </div>
-    );
-  }
-
-  function GeneralAnalysis({ data }) {
-    if (!data) return null;
-    const g = data;
-    return (
-      <div className="flex flex-col gap-3">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Opener</p>
-          <p className="text-sm text-gray-900 mb-2 leading-relaxed">{g.opener?.description}</p>
-          <button
-            onClick={() => jumpToTimestamp('00:00:00')}
-            className="text-xs text-blue-500 hover:text-blue-700 font-mono mb-2 hover:underline"
-          >
-            ▶ Jump to opener
-          </button>
-          <div className="bg-gray-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-gray-400 mb-1">Product relationship</p>
-            <p className="text-sm text-gray-600">{g.opener?.product_relationship}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Brand reveal</p>
-            <button
-              onClick={() => jumpToTimestamp(g.brand_reveal?.timestamp)}
-              className="text-2xl font-medium text-gray-900 mb-1 hover:text-blue-600 transition-colors block"
-            >
-              {g.brand_reveal?.timestamp}
-            </button>
-            <p className="text-xs text-gray-500 leading-relaxed">{g.brand_reveal?.description}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Product reveal</p>
-            <button
-              onClick={() => jumpToTimestamp(g.product_reveal?.timestamp)}
-              className="text-2xl font-medium text-gray-900 mb-1 hover:text-blue-600 transition-colors block"
-            >
-              {g.product_reveal?.timestamp}
-            </button>
-            <p className="text-xs text-gray-500 leading-relaxed">{g.product_reveal?.description}</p>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={() => jumpToTimestamp(g.cta?.timestamp)}
-              className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors"
-            >
-              {g.cta?.timestamp}
-            </button>
-            <span className="text-sm font-medium text-gray-900">"{g.cta?.text}"</span>
-          </div>
-          <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
-        </div>
-
-        <TalentCard data={g.talent} />
-      </div>
-    );
-  }
-
-  function Timeline({ data }) {
-    if (!data?.length) return null;
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-          <p className="text-xs text-gray-400 mt-1">Click any row to jump to that moment</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-400 px-5 py-3 w-24">Time</th>
-                <th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-28">Type</th>
-                <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Visual</th>
-                <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Copy / script</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row, i) => (
-                <tr
-                  key={i}
-                  className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                  onClick={() => jumpToTimestamp(row.timestamp)}
-                >
-                  <td className="px-5 py-3 align-top">
-                    <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
-                      {TYPE_LABELS[row.type] || row.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-700 leading-relaxed align-top max-w-xs">{row.visual}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 leading-relaxed align-top max-w-xs italic">{row.copy || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     );
   }
@@ -522,70 +427,230 @@ export default function Home() {
 
             {videoAnalysis && (
               <>
+                {/* Analysis tabs */}
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+                  <button
+                    onClick={() => setActiveTab('analysis')}
+                    className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Analysis
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('framebyfrime')}
+                    className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'framebyfrime' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Frame by frame
+                  </button>
+                </div>
+
                 {/* Two column layout */}
                 <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
 
-                  {/* Left — analysis */}
+                  {/* Left column */}
                   <div className="flex flex-col gap-4">
 
-                    {/* Hook hero */}
-                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Hook</p>
-                      <p className="text-2xl font-medium text-gray-900 leading-snug mb-3">
-                        "{videoAnalysis.general?.hook?.summary}"
-                      </p>
-                      <p className="text-xs text-gray-400 leading-relaxed">
-                        {videoAnalysis.general?.hook?.psychology}
-                      </p>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: 'Duration', value: videoAnalysis.general?.duration ?? '—' },
-                        { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
-                        { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—' },
-                        { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—' },
-                      ].map(stat => (
-                        <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                          <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
-                          <p className="text-lg font-medium text-gray-900">{stat.value}</p>
+                    {/* TAB 1 — ANALYSIS */}
+                    {activeTab === 'analysis' && (
+                      <>
+                        {/* 1. Hook & Opener */}
+                        <div className="bg-white border border-gray-200 rounded-xl p-6">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
+                          <p className="text-2xl font-medium text-gray-900 leading-snug mb-4">
+                            "{videoAnalysis.general?.hook?.copy}"
+                          </p>
+                          <div className="border-t border-gray-100 pt-4">
+                            <p className="text-xs text-gray-400 mb-1">Visual opener</p>
+                            <p className="text-sm text-gray-700 leading-relaxed mb-3">{videoAnalysis.general?.hook?.visual}</p>
+                            <button
+                              onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}
+                              className="text-xs text-blue-500 hover:text-blue-700 font-mono hover:underline"
+                            >
+                              ▶ {videoAnalysis.general?.opener?.timestamp || '00:00:00'} — Jump to opener
+                            </button>
+                          </div>
                         </div>
-                      ))}
-                    </div>
 
-                    {/* General analysis */}
-                    <GeneralAnalysis data={videoAnalysis.general} />
+                        {/* 2. Ad structure */}
+                        <AdStructureBar
+                          data={videoAnalysis.general?.ad_structure}
+                          duration={videoAnalysis.general?.duration}
+                          brandReveal={videoAnalysis.general?.brand_reveal?.timestamp}
+                          productReveal={videoAnalysis.general?.product_reveal?.timestamp}
+                        />
 
-                    {/* Ad structure timeline */}
-                    <AdStructureTimeline
-                      data={videoAnalysis.general?.ad_structure}
-                      duration={videoAnalysis.general?.duration}
-                    />
-
-                    {/* Frame by frame */}
-                    <Timeline data={videoAnalysis.timeline} />
-
-                    {/* Text treatment — bottom of left column */}
-                    {videoAnalysis.general?.text_treatment && (
-                      <div className="bg-white border border-gray-200 rounded-xl p-5">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Text treatment</p>
-                        <div className="flex flex-col gap-2">
+                        {/* 3. Stats */}
+                        <div className="grid grid-cols-2 gap-3">
                           {[
-                            { label: 'Font style', value: videoAnalysis.general.text_treatment?.font_style },
-                            { label: 'Text size', value: videoAnalysis.general.text_treatment?.text_size },
-                            { label: 'Color contrast', value: videoAnalysis.general.text_treatment?.color_contrast },
-                            { label: 'Motion', value: videoAnalysis.general.text_treatment?.motion },
-                            { label: 'Captions', value: videoAnalysis.general.text_treatment?.captions },
-                          ].map(item => item.value ? (
-                            <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                              <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
-                              <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                            { label: 'Total time', value: videoAnalysis.general?.duration ?? '—' },
+                            { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
+                            { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.brand_reveal?.timestamp },
+                            { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.product_reveal?.timestamp },
+                          ].map(stat => (
+                            <div
+                              key={stat.label}
+                              onClick={() => stat.ts && jumpToTimestamp(stat.ts)}
+                              className={`bg-white border border-gray-200 rounded-xl p-4 text-center ${stat.ts ? 'cursor-pointer hover:border-blue-300 transition-colors' : ''}`}
+                            >
+                              <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
+                              <p className={`text-lg font-medium ${stat.ts ? 'text-blue-600' : 'text-gray-900'}`}>{stat.value}</p>
                             </div>
-                          ) : null)}
+                          ))}
                         </div>
-                      </div>
+
+                        {/* 4. Value propositions */}
+                        {videoAnalysis.general?.value_propositions?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Value propositions</p>
+                            <div className="flex flex-col gap-2">
+                              {videoAnalysis.general.value_propositions.map((vp, i) => (
+                                <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                                  <p className="text-sm text-gray-700 leading-relaxed">{vp}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 5. Talent */}
+                        {videoAnalysis.general?.talent && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
+                            <div className="flex flex-col gap-2">
+                              {[
+                                { label: 'Appearance', value: videoAnalysis.general.talent.appearance },
+                                { label: 'Clothing', value: videoAnalysis.general.talent.clothing },
+                                { label: 'Setting', value: videoAnalysis.general.talent.setting },
+                                { label: 'Energy', value: videoAnalysis.general.talent.energy },
+                              ].map(item => item.value ? (
+                                <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                                  <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
+                                  <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                                </div>
+                              ) : null)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 6. CTA */}
+                        {videoAnalysis.general?.cta && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => jumpToTimestamp(videoAnalysis.general.cta.timestamp)}
+                                className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors flex-shrink-0"
+                              >
+                                {videoAnalysis.general.cta.timestamp}
+                              </button>
+                              <p className="text-sm font-medium text-gray-900">"{videoAnalysis.general.cta.text}"</p>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
+
+                    {/* TAB 2 — FRAME BY FRAME */}
+                    {activeTab === 'framebyfrime' && (
+                      <>
+                        {/* A: Frame by frame table */}
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="px-5 py-4 border-b border-gray-100">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
+                            <p className="text-xs text-gray-400 mt-1">Click any row to jump to that moment</p>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b border-gray-100">
+                                  <th className="text-left text-xs font-medium text-gray-400 px-5 py-3 w-24">Time</th>
+                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-28">Type</th>
+                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Visual</th>
+                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Copy</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {videoAnalysis.timeline?.map((row, i) => (
+                                  <tr
+                                    key={i}
+                                    className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                                    onClick={() => jumpToTimestamp(row.timestamp)}
+                                  >
+                                    <td className="px-5 py-3 align-top">
+                                      <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
+                                    </td>
+                                    <td className="px-4 py-3 align-top">
+                                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
+                                        {TYPE_LABELS[row.type] || row.type}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-700 leading-relaxed align-top max-w-xs">{row.visual}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500 leading-relaxed align-top max-w-xs italic">{row.copy || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* B: Copy only */}
+                        {videoAnalysis.copy_only?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                            <div className="px-5 py-4 border-b border-gray-100">
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Copy only</p>
+                            </div>
+                            <div className="flex flex-col">
+                              {videoAnalysis.copy_only.filter(c => c.text).map((line, i) => (
+                                <div
+                                  key={i}
+                                  className="flex gap-4 px-5 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer"
+                                  onClick={() => jumpToTimestamp(line.timestamp)}
+                                >
+                                  <span className="text-xs font-mono text-blue-500 flex-shrink-0 pt-0.5">{line.timestamp}</span>
+                                  <p className="text-sm text-gray-700 leading-relaxed">{line.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* C: Transferrable copy */}
+                        {videoAnalysis.transferrable_copy?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                            <div className="px-5 py-4 border-b border-gray-100">
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
+                              <p className="text-xs text-gray-400 mt-1">Reusable copy templates from this ad</p>
+                            </div>
+                            <div className="flex flex-col">
+                              {videoAnalysis.transferrable_copy.map((item, i) => (
+                                <div key={i} className="px-5 py-4 border-b border-gray-50 last:border-0">
+                                  <p className="text-xs text-gray-400 mb-1">Original</p>
+                                  <p className="text-sm text-gray-600 italic mb-2">"{item.original}"</p>
+                                  <p className="text-xs text-gray-400 mb-1">Template</p>
+                                  <p className="text-sm font-medium text-gray-900">{item.template}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* D: B-rolls to shoot */}
+                        {videoAnalysis.broll_shots?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
+                            <div className="flex flex-col gap-2">
+                              {videoAnalysis.broll_shots.map((shot, i) => (
+                                <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                                  <span className="w-5 h-5 rounded-full bg-green-50 text-green-600 text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-medium">{i + 1}</span>
+                                  <p className="text-sm text-gray-700 leading-relaxed">{shot}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
                   </div>
 
                   {/* Right — sticky video */}
