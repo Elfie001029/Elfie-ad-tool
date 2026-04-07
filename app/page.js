@@ -17,6 +17,19 @@ const TYPE_COLORS = {
   logo: 'bg-gray-100 text-gray-600',
 };
 
+const SECTION_COLORS = {
+  'Hook': { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700' },
+  'Opener': { bg: 'bg-orange-400', light: 'bg-orange-50', text: 'text-orange-700' },
+  'Personal story': { bg: 'bg-pink-400', light: 'bg-pink-50', text: 'text-pink-700' },
+  'Pain point': { bg: 'bg-red-500', light: 'bg-red-50', text: 'text-red-700' },
+  'Competitor mention': { bg: 'bg-yellow-400', light: 'bg-yellow-50', text: 'text-yellow-700' },
+  'Scientific facts': { bg: 'bg-purple-500', light: 'bg-purple-50', text: 'text-purple-700' },
+  'Product introduction': { bg: 'bg-green-500', light: 'bg-green-50', text: 'text-green-700' },
+  'Social proof': { bg: 'bg-teal-500', light: 'bg-teal-50', text: 'text-teal-700' },
+  'Price or offer': { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700' },
+  'CTA': { bg: 'bg-gray-500', light: 'bg-gray-50', text: 'text-gray-700' },
+};
+
 function timestampToSeconds(ts) {
   if (!ts) return 0;
   const parts = ts.split(':').map(Number);
@@ -121,6 +134,89 @@ export default function Home() {
     }
   }
 
+  function AdStructureTimeline({ data, duration }) {
+    if (!data?.length) return null;
+    const totalSeconds = timestampToSeconds(duration) || 60;
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Ad structure</p>
+        <div className="relative">
+          <div className="flex h-10 rounded-lg overflow-hidden mb-3 gap-px">
+            {data.map((section, i) => {
+              const start = timestampToSeconds(section.start);
+              const end = timestampToSeconds(section.end);
+              const width = ((end - start) / totalSeconds) * 100;
+              const colors = SECTION_COLORS[section.section] || { bg: 'bg-gray-400' };
+              return (
+                <button
+                  key={i}
+                  onClick={() => jumpToTimestamp(section.start)}
+                  className={`${colors.bg} hover:opacity-80 transition-opacity flex items-center justify-center`}
+                  style={{ width: `${width}%`, minWidth: '2px' }}
+                  title={`${section.section} (${section.start} - ${section.end})`}
+                />
+              );
+            })}
+          </div>
+          <div className="flex gap-px mb-4">
+            {data.map((section, i) => {
+              const start = timestampToSeconds(section.start);
+              const end = timestampToSeconds(section.end);
+              const width = ((end - start) / totalSeconds) * 100;
+              return (
+                <div key={i} style={{ width: `${width}%`, minWidth: '2px' }}>
+                  <p className="text-xs text-gray-400 font-mono truncate">{section.start}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {data.map((section, i) => {
+              const colors = SECTION_COLORS[section.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: 'bg-gray-400' };
+              return (
+                <button
+                  key={i}
+                  onClick={() => jumpToTimestamp(section.start)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${colors.light} hover:opacity-80 transition-opacity`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${colors.bg} flex-shrink-0`} />
+                  <span className={`text-xs font-medium ${colors.text}`}>{section.section}</span>
+                  <span className="text-xs text-gray-400 font-mono">{section.start}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function TalentCard({ data }) {
+    if (!data) return null;
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
+        <div className="flex flex-col gap-2">
+          {[
+            { label: 'Type', value: data.type?.replace(/_/g, ' ') },
+            { label: 'Age range', value: data.apparent_age },
+            { label: 'Gender', value: data.apparent_gender },
+            { label: 'Presentation', value: data.presentation_style },
+            { label: 'Speaks to camera', value: data.speaks_directly_to_camera ? 'Yes' : 'No' },
+            { label: 'Tone', value: data.emotional_tone },
+            { label: 'Target audience', value: data.target_audience_signal },
+          ].map(item => item.value ? (
+            <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+              <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
+              <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+            </div>
+          ) : null)}
+        </div>
+      </div>
+    );
+  }
+
   function VideoInputList({ side, videos }) {
     const label = side === 'my' ? 'My ads' : 'Competitor ads';
     const accent = side === 'my' ? 'text-blue-600' : 'text-purple-600';
@@ -198,29 +294,6 @@ export default function Home() {
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Ad structure</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{g.structure}</p>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Text treatment</p>
-          <div className="flex flex-col gap-2">
-            {[
-              { label: 'Font style', value: g.text_treatment?.font_style },
-              { label: 'Text size', value: g.text_treatment?.text_size },
-              { label: 'Color contrast', value: g.text_treatment?.color_contrast },
-              { label: 'Motion', value: g.text_treatment?.motion },
-              { label: 'Captions', value: g.text_treatment?.captions },
-            ].map(item => item.value ? (
-              <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
-                <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-              </div>
-            ) : null)}
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
           <div className="flex items-center gap-3 mb-3">
             <button
@@ -233,6 +306,8 @@ export default function Home() {
           </div>
           <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
         </div>
+
+        <TalentCard data={g.talent} />
       </div>
     );
   }
@@ -243,7 +318,7 @@ export default function Home() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-          <p className="text-xs text-gray-400 mt-1">Click any timestamp to jump to that moment</p>
+          <p className="text-xs text-gray-400 mt-1">Click any row to jump to that moment</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -257,13 +332,13 @@ export default function Home() {
             </thead>
             <tbody>
               {data.map((row, i) => (
-                <tr key={i} className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                <tr
+                  key={i}
+                  className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                   onClick={() => jumpToTimestamp(row.timestamp)}
                 >
                   <td className="px-5 py-3 align-top">
-                    <span className="text-xs font-mono text-blue-500 hover:text-blue-700">
-                      {row.timestamp}
-                    </span>
+                    <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
@@ -448,7 +523,7 @@ export default function Home() {
             {videoAnalysis && (
               <>
                 {/* Two column layout */}
-                <div className="grid grid-cols-2 gap-6 items-start">
+                <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
 
                   {/* Left — analysis */}
                   <div className="flex flex-col gap-4">
@@ -481,6 +556,36 @@ export default function Home() {
 
                     {/* General analysis */}
                     <GeneralAnalysis data={videoAnalysis.general} />
+
+                    {/* Ad structure timeline */}
+                    <AdStructureTimeline
+                      data={videoAnalysis.general?.ad_structure}
+                      duration={videoAnalysis.general?.duration}
+                    />
+
+                    {/* Frame by frame */}
+                    <Timeline data={videoAnalysis.timeline} />
+
+                    {/* Text treatment — bottom of left column */}
+                    {videoAnalysis.general?.text_treatment && (
+                      <div className="bg-white border border-gray-200 rounded-xl p-5">
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Text treatment</p>
+                        <div className="flex flex-col gap-2">
+                          {[
+                            { label: 'Font style', value: videoAnalysis.general.text_treatment?.font_style },
+                            { label: 'Text size', value: videoAnalysis.general.text_treatment?.text_size },
+                            { label: 'Color contrast', value: videoAnalysis.general.text_treatment?.color_contrast },
+                            { label: 'Motion', value: videoAnalysis.general.text_treatment?.motion },
+                            { label: 'Captions', value: videoAnalysis.general.text_treatment?.captions },
+                          ].map(item => item.value ? (
+                            <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                              <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
+                              <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                            </div>
+                          ) : null)}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Right — sticky video */}
@@ -494,15 +599,12 @@ export default function Home() {
                         style={{ maxHeight: '360px' }}
                       />
                       <div className="px-4 py-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-400">Click any timestamp in the analysis to jump to that moment</p>
+                        <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
                       </div>
                     </div>
                   </div>
 
                 </div>
-
-                {/* Timeline — full width below */}
-                <Timeline data={videoAnalysis.timeline} />
               </>
             )}
           </div>

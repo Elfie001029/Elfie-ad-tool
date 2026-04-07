@@ -72,7 +72,24 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
   "motion": "Whether text animates or is static",
   "captions": "Whether captions are used and how they are styled"
 },
-"duration": "Total video duration as a timestamp e.g. 00:00:45"
+"duration": "Total video duration as a timestamp e.g. 00:00:45",
+"ad_structure": [
+  {
+    "section": "Name of this section. Use only these options: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
+    "start": "start timestamp of this section e.g. 00:00:00",
+    "end": "end timestamp of this section e.g. 00:00:05",
+    "color": "assign one of these colors based on section type: blue for Hook, orange for Opener, pink for Personal story, red for Pain point, yellow for Competitor mention, purple for Scientific facts, green for Product introduction, teal for Social proof, amber for Price or offer, gray for CTA"
+  }
+]
+  "talent": {
+  "type": "One of: talking_head, voiceover, ugc_creator, actor, animation, text_only",
+  "apparent_age": "Estimated age range e.g. 25-35",
+  "apparent_gender": "e.g. female, male, non-binary, mixed",
+  "presentation_style": "e.g. casual at home, professional setting, outdoor lifestyle, clinical/authority",
+  "speaks_directly_to_camera": true,
+  "emotional_tone": "e.g. relatable and conversational, authoritative, excited, vulnerable and honest",
+  "target_audience_signal": "What audience this talent is designed to attract e.g. women 35-50 experiencing perimenopause, young men interested in fitness"
+}
 
   },
   "timeline": [
