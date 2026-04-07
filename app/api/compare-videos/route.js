@@ -45,70 +45,60 @@ ${context ? `Context: ${context}` : ''}
 Watch all videos carefully. Then return your response as a valid JSON object with EXACTLY this structure. No markdown, no backticks, no explanation — just raw JSON:
 
 {
-  "trends": {
-    "product_reveal": {
-      "competitor_average": "average timestamp across all GROUP B videos e.g. 00:00:08",
-      "my_average": "average timestamp across all GROUP A videos e.g. 00:00:15",
-      "insight": "one sentence insight about what this difference means"
-    },
-    "brand_reveal": {
-      "competitor_average": "average timestamp across all GROUP B videos",
-      "my_average": "average timestamp across all GROUP A videos",
-      "insight": "one sentence insight about what this difference means"
-    },
-    "attention_words": [
-      "word or short phrase 1",
-      "word or short phrase 2",
-      "word or short phrase 3",
-      "word or short phrase 4",
-      "word or short phrase 5"
+  "hook": {
+    "competitor_hooks": [
+      {
+        "copy": "Exact hook copy from this competitor ad",
+        "strategy": "The psychological strategy behind this hook"
+      }
     ],
-    "structural_pattern": "2-3 sentences describing the most common narrative structure used across GROUP B competitor ads"
+    "my_hooks": [
+      {
+        "copy": "Exact hook copy from this ad"
+      }
+    ],
+    "analysis": "2-3 sentences comparing the hook strategies between GROUP A and GROUP B",
+    "gap": "The specific thing GROUP A is missing in their hooks"
   },
-  "gaps": [
+  "ad_structure": {
+    "my_average": [
+      {
+        "section": "Use only: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
+        "percentage": 10
+      }
+    ],
+    "competitor_average": [
+      {
+        "section": "Use only: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
+        "percentage": 10
+      }
+    ],
+    "gap": "What structural differences matter most"
+  },
+  "buzz_words": [
     {
-      "dimension": "Hook strategy",
-      "competitor": "What GROUP B is doing in this dimension",
-      "mine": "What GROUP A is doing in this dimension",
-      "gap": "The specific thing GROUP A is missing or should change"
+      "word": "perimenopause",
+      "frequency": "high"
     },
     {
-      "dimension": "Pacing & editing",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
+      "word": "thinning",
+      "frequency": "high"
     },
     {
-      "dimension": "Product reveal timing",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
-    },
-    {
-      "dimension": "Brand name reveal",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
-    },
-    {
-      "dimension": "Social proof & trust signals",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
-    },
-    {
-      "dimension": "Emotional arc",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
-    },
-    {
-      "dimension": "CTA structure",
-      "competitor": "What GROUP B is doing",
-      "mine": "What GROUP A is doing",
-      "gap": "The specific gap"
+      "word": "women in their 40s",
+      "frequency": "medium"
     }
   ],
+  "stats": {
+    "my_avg_duration": "00:00:28",
+    "competitor_avg_duration": "00:00:45",
+    "my_avg_cuts": 8,
+    "competitor_avg_cuts": 14,
+    "my_brand_reveal": "00:00:02",
+    "competitor_brand_reveal": "00:00:22",
+    "my_product_reveal": "00:00:04",
+    "competitor_product_reveal": "00:00:18"
+  },
   "top3": [
     {
       "priority": 1,
@@ -125,7 +115,33 @@ Watch all videos carefully. Then return your response as a valid JSON object wit
       "title": "Short title for this gap",
       "action": "Specific actionable thing GROUP A should do immediately"
     }
-  ]
+  ],
+  "value_propositions": [
+    {
+      "vp": "Name of value proposition e.g. hormone-related hair loss",
+      "competitor_has": true,
+      "mine_has": false
+    }
+  ],
+  "visual_comparison": {
+    "mine": "2-3 sentences describing the visual style of GROUP A ads",
+    "competitor": "2-3 sentences describing the visual style of GROUP B ads",
+    "gap": "The key visual difference that matters most"
+  },
+  "talent": {
+    "mine": {
+      "appearance": "Physical description of talent in GROUP A ads",
+      "clothing": "What they are wearing",
+      "setting": "Where they are filming",
+      "energy": "How they come across"
+    },
+    "competitor": {
+      "appearance": "Physical description of talent in GROUP B ads",
+      "clothing": "What they are wearing",
+      "setting": "Where they are filming",
+      "energy": "How they come across"
+    }
+  }
 }`
     });
 
