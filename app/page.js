@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 const TYPE_LABELS = {
   talking_head: 'Talking head',
@@ -17,6 +17,14 @@ const TYPE_COLORS = {
   logo: 'bg-gray-100 text-gray-600',
 };
 
+function timestampToSeconds(ts) {
+  if (!ts) return 0;
+  const parts = ts.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0];
+}
+
 export default function Home() {
   const [mode, setMode] = useState('single');
   const [videoUrl, setVideoUrl] = useState('');
@@ -24,6 +32,7 @@ export default function Home() {
   const [videoAnalysis, setVideoAnalysis] = useState(null);
   const [analyzingVideo, setAnalyzingVideo] = useState(false);
   const [videoError, setVideoError] = useState('');
+  const videoRef = useRef(null);
 
   const [myVideos, setMyVideos] = useState(['']);
   const [competitorVideos, setCompetitorVideos] = useState(['']);
@@ -50,6 +59,14 @@ export default function Home() {
       setVideoError('Something went wrong. Please try again.');
     } finally {
       setAnalyzingVideo(false);
+    }
+  }
+
+  function jumpToTimestamp(ts) {
+    if (videoRef.current) {
+      videoRef.current.currentTime = timestampToSeconds(ts);
+      videoRef.current.play();
+      videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
@@ -138,54 +155,87 @@ export default function Home() {
   }
 
   function GeneralAnalysis({ data }) {
-  if (!data) return null;
-  const g = data;
-  return (
-    <div className="flex flex-col gap-3">
-
-      {/* Opener */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Opener</p>
-        <p className="text-sm text-gray-900 mb-2 leading-relaxed">{g.opener?.description}</p>
-        <div className="bg-gray-50 rounded-lg px-3 py-2">
-          <p className="text-xs text-gray-400 mb-1">Product relationship</p>
-          <p className="text-sm text-gray-600">{g.opener?.product_relationship}</p>
-        </div>
-      </div>
-
-      {/* Timestamps grid */}
-      <div className="grid grid-cols-2 gap-3">
+    if (!data) return null;
+    const g = data;
+    return (
+      <div className="flex flex-col gap-3">
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Brand reveal</p>
-          <p className="text-2xl font-medium text-gray-900 mb-1">{g.brand_reveal?.timestamp}</p>
-          <p className="text-xs text-gray-500 leading-relaxed">{g.brand_reveal?.description}</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Opener</p>
+          <p className="text-sm text-gray-900 mb-2 leading-relaxed">{g.opener?.description}</p>
+          <button
+            onClick={() => jumpToTimestamp('00:00:00')}
+            className="text-xs text-blue-500 hover:text-blue-700 font-mono mb-2 hover:underline"
+          >
+            ▶ Jump to opener
+          </button>
+          <div className="bg-gray-50 rounded-lg px-3 py-2">
+            <p className="text-xs text-gray-400 mb-1">Product relationship</p>
+            <p className="text-sm text-gray-600">{g.opener?.product_relationship}</p>
+          </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Brand reveal</p>
+            <button
+              onClick={() => jumpToTimestamp(g.brand_reveal?.timestamp)}
+              className="text-2xl font-medium text-gray-900 mb-1 hover:text-blue-600 transition-colors block"
+            >
+              {g.brand_reveal?.timestamp}
+            </button>
+            <p className="text-xs text-gray-500 leading-relaxed">{g.brand_reveal?.description}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Product reveal</p>
+            <button
+              onClick={() => jumpToTimestamp(g.product_reveal?.timestamp)}
+              className="text-2xl font-medium text-gray-900 mb-1 hover:text-blue-600 transition-colors block"
+            >
+              {g.product_reveal?.timestamp}
+            </button>
+            <p className="text-xs text-gray-500 leading-relaxed">{g.product_reveal?.description}</p>
+          </div>
+        </div>
+
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Product reveal</p>
-          <p className="text-2xl font-medium text-gray-900 mb-1">{g.product_reveal?.timestamp}</p>
-          <p className="text-xs text-gray-500 leading-relaxed">{g.product_reveal?.description}</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Ad structure</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{g.structure}</p>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Text treatment</p>
+          <div className="flex flex-col gap-2">
+            {[
+              { label: 'Font style', value: g.text_treatment?.font_style },
+              { label: 'Text size', value: g.text_treatment?.text_size },
+              { label: 'Color contrast', value: g.text_treatment?.color_contrast },
+              { label: 'Motion', value: g.text_treatment?.motion },
+              { label: 'Captions', value: g.text_treatment?.captions },
+            ].map(item => item.value ? (
+              <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
+                <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+              </div>
+            ) : null)}
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={() => jumpToTimestamp(g.cta?.timestamp)}
+              className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors"
+            >
+              {g.cta?.timestamp}
+            </button>
+            <span className="text-sm font-medium text-gray-900">"{g.cta?.text}"</span>
+          </div>
+          <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
         </div>
       </div>
-
-      {/* Structure */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Ad structure</p>
-        <p className="text-sm text-gray-700 leading-relaxed">{g.structure}</p>
-      </div>
-
-      {/* CTA */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded">{g.cta?.timestamp}</span>
-          <span className="text-sm font-medium text-gray-900">"{g.cta?.text}"</span>
-        </div>
-        <p className="text-sm text-gray-500 leading-relaxed">{g.cta?.strategy}</p>
-      </div>
-
-    </div>
-  );
-}
+    );
+  }
 
   function Timeline({ data }) {
     if (!data?.length) return null;
@@ -193,6 +243,7 @@ export default function Home() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
+          <p className="text-xs text-gray-400 mt-1">Click any timestamp to jump to that moment</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -206,8 +257,14 @@ export default function Home() {
             </thead>
             <tbody>
               {data.map((row, i) => (
-                <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                  <td className="px-5 py-3 text-xs font-mono text-gray-500 align-top">{row.timestamp}</td>
+                <tr key={i} className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                  onClick={() => jumpToTimestamp(row.timestamp)}
+                >
+                  <td className="px-5 py-3 align-top">
+                    <span className="text-xs font-mono text-blue-500 hover:text-blue-700">
+                      {row.timestamp}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 align-top">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
                       {TYPE_LABELS[row.type] || row.type}
@@ -322,7 +379,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-6xl mx-auto">
 
         <div className="mb-8">
           <h1 className="text-2xl font-medium text-gray-900">Ad Library Intelligence</h1>
@@ -389,51 +446,65 @@ export default function Home() {
             </div>
 
             {videoAnalysis && (
-  <>
-    {/* Video player */}
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <video
-        src={videoUrl}
-        controls
-        className="w-full"
-        style={{ maxHeight: '400px' }}
-      />
-    </div>
+              <>
+                {/* Two column layout */}
+                <div className="grid grid-cols-2 gap-6 items-start">
 
-    {/* Hook hero */}
-    <div className="bg-gray-900 rounded-xl p-6">
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Hook</p>
-      <p className="text-2xl font-medium text-white leading-snug mb-4">
-        {videoAnalysis.general?.hook?.summary}
-      </p>
-      <p className="text-sm text-gray-400 leading-relaxed">
-        {videoAnalysis.general?.hook?.psychology}
-      </p>
-    </div>
+                  {/* Left — analysis */}
+                  <div className="flex flex-col gap-4">
 
-    {/* Stats row */}
-    <div className="grid grid-cols-3 gap-3">
-      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-        <p className="text-xs text-gray-400 mb-1">Total cuts</p>
-        <p className="text-xl font-medium text-gray-900">{videoAnalysis.timeline?.length ?? '—'}</p>
-      </div>
-      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-        <p className="text-xs text-gray-400 mb-1">Brand reveal</p>
-        <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.brand_reveal?.timestamp ?? '—'}</p>
-      </div>
-      <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-        <p className="text-xs text-gray-400 mb-1">Product reveal</p>
-        <p className="text-xl font-medium text-gray-900">{videoAnalysis.general?.product_reveal?.timestamp ?? '—'}</p>
-      </div>
-    </div>
+                    {/* Hook hero */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-6">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Hook</p>
+                      <p className="text-2xl font-medium text-gray-900 leading-snug mb-3">
+                        "{videoAnalysis.general?.hook?.summary}"
+                      </p>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        {videoAnalysis.general?.hook?.psychology}
+                      </p>
+                    </div>
 
-    {/* General analysis — hook removed since it's now the hero */}
-    <GeneralAnalysis data={videoAnalysis.general} />
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Duration', value: videoAnalysis.general?.duration ?? '—' },
+                        { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
+                        { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—' },
+                        { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—' },
+                      ].map(stat => (
+                        <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
+                          <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
+                          <p className="text-lg font-medium text-gray-900">{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
 
-    {/* Timeline */}
-    <Timeline data={videoAnalysis.timeline} />
-  </>
-)}
+                    {/* General analysis */}
+                    <GeneralAnalysis data={videoAnalysis.general} />
+                  </div>
+
+                  {/* Right — sticky video */}
+                  <div style={{ position: 'sticky', top: '24px' }}>
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <video
+                        ref={videoRef}
+                        src={videoUrl}
+                        controls
+                        className="w-full"
+                        style={{ maxHeight: '360px' }}
+                      />
+                      <div className="px-4 py-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-400">Click any timestamp in the analysis to jump to that moment</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Timeline — full width below */}
+                <Timeline data={videoAnalysis.timeline} />
+              </>
+            )}
           </div>
         )}
 
@@ -470,33 +541,44 @@ export default function Home() {
             </div>
 
             {compareResult && (
-  <>
-    {/* Hook & opener hero for comparison */}
-    {compareResult.gaps?.filter(g => g.dimension === 'Hook strategy' || g.dimension === 'Pacing & editing').map((gap, i) => (
-      <div key={i} className="bg-gray-900 rounded-xl p-6">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">{gap.dimension}</p>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <p className="text-xs text-gray-500 mb-2">Competitors</p>
-            <p className="text-lg font-medium text-white leading-snug">{gap.competitor}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-2">My ads</p>
-            <p className="text-lg font-medium text-gray-400 leading-snug">{gap.mine}</p>
-          </div>
-        </div>
-        <div className="border-t border-gray-700 pt-4">
-          <p className="text-xs text-gray-500 mb-1">Gap</p>
-          <p className="text-sm text-amber-400 leading-relaxed">{gap.gap}</p>
-        </div>
-      </div>
-    ))}
+              <>
+                {compareResult.gaps?.filter(g => g.dimension === 'Hook strategy' || g.dimension === 'Pacing & editing').map((gap, i) => (
+                  <div key={i} className="bg-gray-900 rounded-xl p-6">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">{gap.dimension}</p>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Competitors</p>
+                        <p className="text-lg font-medium text-white leading-snug">{gap.competitor}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">My ads</p>
+                        <p className="text-lg font-medium text-gray-400 leading-snug">{gap.mine}</p>
+                      </div>
+                    </div>
+                    <div className="border-t border-gray-700 pt-4">
+                      <p className="text-xs text-gray-500 mb-1">Gap</p>
+                      <p className="text-sm text-amber-400 leading-relaxed">{gap.gap}</p>
+                    </div>
+                  </div>
+                ))}
 
-    <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Trends</p>
-      <p className="text-xs text-gray-400">Patterns across all competitor ads</p>
-    </div>
-    <TrendsSection data={compareResult.trends} />
+                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Trends</p>
+                  <p className="text-xs text-gray-400">Patterns across all competitor ads</p>
+                </div>
+                <TrendsSection data={compareResult.trends} />
+
+                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Gap analysis</p>
+                  <p className="text-xs text-gray-400">What your ads are missing vs competitors</p>
+                </div>
+                <GapsSection data={compareResult.gaps} />
+
+                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Top 3 priorities</p>
+                  <p className="text-xs text-gray-400">The most important things to fix first</p>
+                </div>
+                <Top3Section data={compareResult.top3} />
               </>
             )}
           </div>

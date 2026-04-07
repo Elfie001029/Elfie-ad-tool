@@ -43,7 +43,7 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
 {
   "general": {
     "hook": {
-      "summary": "One sentence describing the hook",
+      "summary": "The exact words spoken or shown on screen in the first 3 seconds of the video",
       "psychology": "The psychological principle being used and why it works to stop the scroll"
     },
     "opener": {
@@ -64,6 +64,16 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "text": "The actual CTA text or message shown",
       "strategy": "Why this CTA works and how it is framed"
     }
+
+    "text_treatment": {
+  "font_style": "Description of font style used e.g. bold sans-serif, script, all caps",
+  "text_size": "How text size is used e.g. large supers, small captions",
+  "color_contrast": "How color contrast is used for text e.g. white text on dark background",
+  "motion": "Whether text animates or is static",
+  "captions": "Whether captions are used and how they are styled"
+},
+"duration": "Total video duration as a timestamp e.g. 00:00:45"
+
   },
   "timeline": [
     {
