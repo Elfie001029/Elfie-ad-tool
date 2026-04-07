@@ -470,22 +470,33 @@ export default function Home() {
             </div>
 
             {compareResult && (
-              <>
-                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Trends</p>
-                  <p className="text-xs text-gray-400">Patterns across all competitor ads</p>
-                </div>
-                <TrendsSection data={compareResult.trends} />
-                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Gap analysis</p>
-                  <p className="text-xs text-gray-400">What your ads are missing vs competitors</p>
-                </div>
-                <GapsSection data={compareResult.gaps} />
-                <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Top 3 priorities</p>
-                  <p className="text-xs text-gray-400">The most important things to fix first</p>
-                </div>
-                <Top3Section data={compareResult.top3} />
+  <>
+    {/* Hook & opener hero for comparison */}
+    {compareResult.gaps?.filter(g => g.dimension === 'Hook strategy' || g.dimension === 'Pacing & editing').map((gap, i) => (
+      <div key={i} className="bg-gray-900 rounded-xl p-6">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">{gap.dimension}</p>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Competitors</p>
+            <p className="text-lg font-medium text-white leading-snug">{gap.competitor}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-2">My ads</p>
+            <p className="text-lg font-medium text-gray-400 leading-snug">{gap.mine}</p>
+          </div>
+        </div>
+        <div className="border-t border-gray-700 pt-4">
+          <p className="text-xs text-gray-500 mb-1">Gap</p>
+          <p className="text-sm text-amber-400 leading-relaxed">{gap.gap}</p>
+        </div>
+      </div>
+    ))}
+
+    <div className="bg-white border border-gray-200 rounded-xl px-5 py-4 border-l-4 border-l-gray-900">
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Trends</p>
+      <p className="text-xs text-gray-400">Patterns across all competitor ads</p>
+    </div>
+    <TrendsSection data={compareResult.trends} />
               </>
             )}
           </div>
