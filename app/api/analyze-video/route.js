@@ -22,7 +22,7 @@ export async function POST(request) {
     console.log('Video fetched, sending to Gemini...');
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: [
         {
           role: 'user',
