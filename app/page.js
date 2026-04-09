@@ -47,6 +47,10 @@ export default function Home() {
   const [analyzingVideo, setAnalyzingVideo] = useState(false);
   const [videoError, setVideoError] = useState('');
   const videoRef = useRef(null);
+  const captureVideoRef = useRef(null);
+
+  const [capturedFrames, setCapturedFrames] = useState({});
+  const [capturingFrames, setCapturingFrames] = useState(false);
 
   const [myVideos, setMyVideos] = useState(['']);
   const [competitorVideos, setCompetitorVideos] = useState(['']);
@@ -58,6 +62,7 @@ export default function Home() {
   async function analyzeVideo() {
     if (!videoUrl) return setVideoError('Please paste a video URL first.');
     setVideoError('');
+    setCapturedFrames({});
     setAnalyzingVideo(true);
     setVideoAnalysis(null);
     setActiveTab('analysis');
@@ -75,6 +80,46 @@ export default function Home() {
     } finally {
       setAnalyzingVideo(false);
     }
+  }
+
+  async function captureFrames() {
+    if (!captureVideoRef.current || !videoAnalysis?.timeline?.length) return;
+    setCapturingFrames(true);
+    setCapturedFrames({});
+
+    const video = captureVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 180;
+    const ctx = canvas.getContext('2d');
+    const frames = {};
+
+    for (const row of videoAnalysis.timeline) {
+      const seconds = timestampToSeconds(row.timestamp);
+      await new Promise(resolve => {
+        function captureAndResolve() {
+          try {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames[row.timestamp] = canvas.toDataURL('image/jpeg', 0.7);
+          } catch (e) {
+            frames[row.timestamp] = null;
+          }
+          setCapturedFrames({ ...frames });
+          resolve();
+        }
+        video.currentTime = seconds;
+        video.addEventListener('seeked', function onSeeked() {
+          video.removeEventListener('seeked', onSeeked);
+          if (video.readyState >= 2) {
+            captureAndResolve();
+          } else {
+            video.addEventListener('canplay', captureAndResolve, { once: true });
+          }
+        }, { once: true });
+      });
+    }
+
+    setCapturingFrames(false);
   }
 
   function jumpToTimestamp(ts) {
@@ -431,37 +476,50 @@ export default function Home() {
                     {activeTab === 'framebyfrime' && (
                       <>
                         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="px-5 py-4 border-b border-gray-100">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-                            <p className="text-xs text-gray-400 mt-1">Click any row to jump to that moment</p>
+                          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {Object.keys(capturedFrames).length > 0
+                                  ? `${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length} frames captured`
+                                  : 'Capture frames to see thumbnails alongside each moment'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={captureFrames}
+                              disabled={capturingFrames}
+                              className="flex-shrink-0 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                              {capturingFrames
+                                ? `Capturing ${Object.keys(capturedFrames).length} / ${videoAnalysis.timeline?.length}…`
+                                : Object.keys(capturedFrames).length > 0 ? 'Re-capture' : 'Capture frames'}
+                            </button>
                           </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full">
-                              <thead>
-                                <tr className="border-b border-gray-100">
-                                  <th className="text-left text-xs font-medium text-gray-400 px-5 py-3 w-24">Time</th>
-                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3 w-28">Type</th>
-                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Visual</th>
-                                  <th className="text-left text-xs font-medium text-gray-400 px-4 py-3">Copy</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {videoAnalysis.timeline?.map((row, i) => (
-                                  <tr key={i}
-                                    className={`border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                                    onClick={() => jumpToTimestamp(row.timestamp)}>
-                                    <td className="px-5 py-3 align-top"><span className="text-xs font-mono text-blue-500">{row.timestamp}</span></td>
-                                    <td className="px-4 py-3 align-top">
-                                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
-                                        {TYPE_LABELS[row.type] || row.type}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-xs text-gray-700 leading-relaxed align-top max-w-xs">{row.visual}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 leading-relaxed align-top max-w-xs italic">{row.copy || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                          <div className="divide-y divide-gray-50">
+                            {videoAnalysis.timeline?.map((row, i) => (
+                              <div key={i}
+                                className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors"
+                                onClick={() => jumpToTimestamp(row.timestamp)}>
+                                <div className="flex-shrink-0 w-40 rounded-lg overflow-hidden bg-gray-100" style={{ height: '90px' }}>
+                                  {capturedFrames[row.timestamp]
+                                    ? <img src={capturedFrames[row.timestamp]} alt={`Frame at ${row.timestamp}`} className="w-full h-full object-cover" />
+                                    : <div className="w-full h-full flex items-center justify-center">
+                                        {capturingFrames
+                                          ? <span className="text-xs text-gray-300">…</span>
+                                          : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}
+                                      </div>}
+                                </div>
+                                <div className="flex-1 min-w-0 py-0.5">
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>
+                                      {TYPE_LABELS[row.type] || row.type}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-700 leading-relaxed mb-1">{row.visual}</p>
+                                  {row.copy && <p className="text-xs text-gray-400 italic leading-relaxed">"{row.copy}"</p>}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
@@ -503,6 +561,7 @@ export default function Home() {
                   <div style={{ position: 'sticky', top: '24px' }}>
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: '360px' }} />
+                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }} />
                       <div className="px-4 py-3 border-t border-gray-100">
                         <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
                       </div>
