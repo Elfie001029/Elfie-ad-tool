@@ -1,20 +1,18 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const TYPE_LABELS = {
   talking_head: 'Talking head',
-  broll: 'B-roll',
-  text_overlay: 'Text overlay',
-  product_shot: 'Product shot',
-  logo: 'Logo',
+  talent_broll: 'Talent B-roll',
+  product_broll: 'Product B-roll',
+  greenscreen: 'Greenscreen',
 };
 
 const TYPE_COLORS = {
   talking_head: 'bg-blue-50 text-blue-700',
-  broll: 'bg-green-50 text-green-700',
-  text_overlay: 'bg-purple-50 text-purple-700',
-  product_shot: 'bg-amber-50 text-amber-700',
-  logo: 'bg-gray-100 text-gray-600',
+  talent_broll: 'bg-green-50 text-green-700',
+  product_broll: 'bg-amber-50 text-amber-700',
+  greenscreen: 'bg-purple-50 text-purple-700',
 };
 
 const SECTION_COLORS = {
@@ -51,6 +49,7 @@ export default function Home() {
 
   const [capturedFrames, setCapturedFrames] = useState({});
   const [capturingFrames, setCapturingFrames] = useState(false);
+  const [openerFrame, setOpenerFrame] = useState(null);
 
   const [myVideos, setMyVideos] = useState(['']);
   const [competitorVideos, setCompetitorVideos] = useState(['']);
@@ -63,6 +62,7 @@ export default function Home() {
     if (!videoUrl) return setVideoError('Please paste a video URL first.');
     setVideoError('');
     setCapturedFrames({});
+    setOpenerFrame(null);
     setAnalyzingVideo(true);
     setVideoAnalysis(null);
     setActiveTab('analysis');
@@ -82,6 +82,45 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (activeTab === 'framebyfrime' && videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) {
+      captureFrames();
+    }
+  }, [activeTab, videoAnalysis]);
+
+  useEffect(() => {
+    if (videoAnalysis?.general?.opener?.timestamp) {
+      captureOpenerFrame(videoAnalysis.general.opener.timestamp);
+    }
+  }, [videoAnalysis]);
+
+  async function captureOpenerFrame(timestamp) {
+    const video = captureVideoRef.current;
+    if (!video) return;
+    const seconds = timestampToSeconds(timestamp);
+    const canvas = document.createElement('canvas');
+    canvas.width = 540;
+    canvas.height = 960;
+    const ctx = canvas.getContext('2d');
+    await new Promise(resolve => {
+      video.currentTime = seconds;
+      video.addEventListener('seeked', function onSeeked() {
+        video.removeEventListener('seeked', onSeeked);
+        if (video.readyState >= 2) {
+          resolve();
+        } else {
+          video.addEventListener('canplay', resolve, { once: true });
+        }
+      }, { once: true });
+    });
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      setOpenerFrame(canvas.toDataURL('image/jpeg', 0.85));
+    } catch (e) {
+      setOpenerFrame(null);
+    }
+  }
+
   async function captureFrames() {
     if (!captureVideoRef.current || !videoAnalysis?.timeline?.length) return;
     setCapturingFrames(true);
@@ -89,8 +128,8 @@ export default function Home() {
 
     const video = captureVideoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 180;
+    canvas.width = 120;
+    canvas.height = 380;
     const ctx = canvas.getContext('2d');
     const frames = {};
 
@@ -390,9 +429,18 @@ export default function Home() {
                       <>
                         <div className="bg-white border border-gray-200 rounded-xl p-6">
                           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
-                          <p className="text-2xl font-medium text-gray-900 leading-snug mb-4">
-                            "{videoAnalysis.general?.hook?.copy}"
-                          </p>
+                          <div className="flex gap-4 mb-4">
+                            {openerFrame && (
+                              <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer"
+                                style={{ width: '72px', height: '128px' }}
+                                onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
+                                <img src={openerFrame} alt="Opener frame" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <p className="text-2xl font-medium text-gray-900 leading-snug">
+                              "{videoAnalysis.general?.hook?.copy}"
+                            </p>
+                          </div>
                           <div className="border-t border-gray-100 pt-4">
                             <p className="text-xs text-gray-400 mb-1">Visual opener</p>
                             <p className="text-sm text-gray-700 leading-relaxed mb-3">{videoAnalysis.general?.hook?.visual}</p>
@@ -430,9 +478,12 @@ export default function Home() {
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Value propositions</p>
                             <div className="flex flex-col gap-2">
                               {videoAnalysis.general.value_propositions.map((vp, i) => (
-                                <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                                <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
                                   <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                                  <p className="text-sm text-gray-700 leading-relaxed">{vp}</p>
+                                  <div className="flex flex-col gap-1">
+                                    <p className="text-sm font-medium text-gray-800 leading-snug">{vp.summary ?? vp}</p>
+                                    {vp.copy && <p className="text-xs text-gray-500 leading-relaxed italic">"{vp.copy}"</p>}
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -476,30 +527,22 @@ export default function Home() {
                     {activeTab === 'framebyfrime' && (
                       <>
                         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {Object.keys(capturedFrames).length > 0
-                                  ? `${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length} frames captured`
-                                  : 'Capture frames to see thumbnails alongside each moment'}
-                              </p>
-                            </div>
-                            <button
-                              onClick={captureFrames}
-                              disabled={capturingFrames}
-                              className="flex-shrink-0 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          <div className="px-5 py-4 border-b border-gray-100">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
                               {capturingFrames
-                                ? `Capturing ${Object.keys(capturedFrames).length} / ${videoAnalysis.timeline?.length}…`
-                                : Object.keys(capturedFrames).length > 0 ? 'Re-capture' : 'Capture frames'}
-                            </button>
+                                ? `Capturing ${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length}…`
+                                : Object.keys(capturedFrames).length > 0
+                                  ? `${Object.keys(capturedFrames).length} frames captured`
+                                  : 'Click any frame to jump to that moment'}
+                            </p>
                           </div>
                           <div className="divide-y divide-gray-50">
                             {videoAnalysis.timeline?.map((row, i) => (
                               <div key={i}
                                 className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors"
                                 onClick={() => jumpToTimestamp(row.timestamp)}>
-                                <div className="flex-shrink-0 w-40 rounded-lg overflow-hidden bg-gray-100" style={{ height: '90px' }}>
+                                <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '60px', height: '190px' }}>
                                   {capturedFrames[row.timestamp]
                                     ? <img src={capturedFrames[row.timestamp]} alt={`Frame at ${row.timestamp}`} className="w-full h-full object-cover" />
                                     : <div className="w-full h-full flex items-center justify-center">
@@ -534,10 +577,22 @@ export default function Home() {
 
                         {videoAnalysis.transferrable_copy?.length > 0 && (
                           <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Transferrable format</p>
-                            <p className="text-sm text-gray-700 leading-relaxed">
-                              {videoAnalysis.transferrable_copy.map(item => item.template).join(' ')}
-                            </p>
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(item => item.template).join('\n'))}
+                                className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50 transition-colors">
+                                Copy all
+                              </button>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                              {videoAnalysis.transferrable_copy.map((item, i) => (
+                                <div key={i} className="flex flex-col gap-1 py-2 border-b border-gray-50 last:border-0">
+                                  <p className="text-xs text-gray-400 italic leading-relaxed">"{item.original}"</p>
+                                  <p className="text-sm text-gray-800 leading-relaxed">{item.template}</p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 

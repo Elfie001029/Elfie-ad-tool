@@ -43,7 +43,7 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
 {
   "general": {
     "hook": {
-      "copy": "The exact words spoken or shown on screen in the first 3 seconds of the video",
+      "copy": "The exact words spoken aloud in the first 3 seconds. If no voice over, use on-screen text instead.",
       "visual": "What is visually happening in the first 3 seconds"
     },
     "opener": {
@@ -64,9 +64,10 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "text": "The actual CTA text or message shown"
     },
     "value_propositions": [
-      "First VP mentioned e.g. clinically proven",
-      "Second VP mentioned e.g. free shipping",
-      "Third VP mentioned e.g. doctor-approved"
+      {
+        "summary": "Short label for this VP e.g. Clinically proven",
+        "copy": "The exact words spoken or shown in the video that express this VP e.g. 'Tested by 3 independent labs and proven to regrow hair in 90 days'"
+      }
     ],
     "talent": {
       "appearance": "Physical description e.g. woman in her late 30s, natural makeup, brown hair",
@@ -76,7 +77,7 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
     },
     "ad_structure": [
       {
-        "section": "Use only: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA",
+        "section": "Use only one of these exact labels: Hook, Opener, Personal story, Pain point, Competitor mention, Scientific facts, Product introduction, Social proof, Price or offer, CTA. Hook = the first attention-grabbing moment (question, bold claim, or pattern interrupt). Opener = the first visual scene before any claim is made. Personal story = talent sharing their own experience. Pain point = describing a problem the viewer has. Competitor mention = referencing another brand or old solution. Scientific facts = stats, studies, clinical data. Product introduction = first time the product is shown or named. Social proof = reviews, testimonials, before/after. Price or offer = discount, guarantee, free shipping. CTA = call to action.",
         "start": "00:00:00",
         "end": "00:00:05"
       }
@@ -92,21 +93,21 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
   "timeline": [
     {
       "timestamp": "00:00:00",
-      "type": "talking_head",
+      "type": "Use only one of these exact values: talking_head = person speaking directly to camera and their words are transcribed; talent_broll = talent is on screen but not speaking directly to camera (doing something, reacting, walking etc); product_broll = shot that prominently features the product without talent speaking to camera; greenscreen = a person is composited over a different background or footage.",
       "visual": "What is on screen at this moment",
-      "copy": "Exact words spoken or shown as text, empty string if silent"
+      "copy": "If talking_head: exact words spoken. If on-screen text only: exact text shown. Empty string if neither."
     }
   ],
   "copy_only": [
     {
       "timestamp": "00:00:00",
-      "text": "Exact words spoken or shown on screen at this moment"
+      "text": "PRIORITY: transcribe the spoken audio verbatim. Only use on-screen text if there is no voice over or spoken audio at this moment."
     }
   ],
   "transferrable_copy": [
     {
-      "original": "The exact original line from the video",
-      "template": "The reusable format e.g. [target audience] need to try [product name]"
+      "original": "The exact line from the audio transcript or on-screen copy",
+      "template": "Rewrite this line as a fill-in-the-blank template replacing brand/product/audience-specific words with [placeholders] e.g. [target audience] need to try [product name]"
     }
   ],
   "broll_shots": [
@@ -114,7 +115,9 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
     "Short production direction e.g. Close-up of product packaging on marble surface",
     "Short production direction e.g. Person looking at hair in bathroom mirror, natural light"
   ]
-}`
+}
+
+IMPORTANT for copy_only and transferrable_copy: cover the ENTIRE script from start to finish. Do not skip or summarise — every spoken line or on-screen text line must appear. transferrable_copy must be derived directly from copy_only and cover every line in order.`
             }
           ]
         }
