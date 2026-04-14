@@ -98,6 +98,7 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "copy": "If talking_head: exact words spoken. If on-screen text only: exact text shown. Empty string if neither."
     }
   ],
+  "_timeline_instruction": "EVERY visible cut must have its own entry. A cut is any moment the shot changes — new angle, new scene, new clip, transition, text overlay appearing on a new background. Do not group multiple cuts into one entry. A 20-second ad should typically have 8-20+ entries.",
   "copy_only": [
     {
       "timestamp": "00:00:00",
@@ -111,9 +112,10 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
     }
   ],
   "broll_shots": [
-    "Short production direction e.g. Woman holding product in good lighting against clean background",
-    "Short production direction e.g. Close-up of product packaging on marble surface",
-    "Short production direction e.g. Person looking at hair in bathroom mirror, natural light"
+    {
+      "timestamp": "00:00:00",
+      "description": "Short production direction e.g. Woman holding product in good lighting against clean background"
+    }
   ]
 }
 

@@ -50,6 +50,7 @@ export default function Home() {
   const [capturedFrames, setCapturedFrames] = useState({});
   const [capturingFrames, setCapturingFrames] = useState(false);
   const [openerFrame, setOpenerFrame] = useState(null);
+  const [videoNaturalSize, setVideoNaturalSize] = useState(null);
 
   const [myVideos, setMyVideos] = useState(['']);
   const [competitorVideos, setCompetitorVideos] = useState(['']);
@@ -99,8 +100,10 @@ export default function Home() {
     if (!video) return;
     const seconds = timestampToSeconds(timestamp);
     const canvas = document.createElement('canvas');
+    const nw = videoNaturalSize?.w || 9;
+    const nh = videoNaturalSize?.h || 16;
     canvas.width = 540;
-    canvas.height = 960;
+    canvas.height = Math.round(540 * nh / nw);
     const ctx = canvas.getContext('2d');
     await new Promise(resolve => {
       video.currentTime = seconds;
@@ -128,8 +131,10 @@ export default function Home() {
 
     const video = captureVideoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = 120;
-    canvas.height = 380;
+    const nw = videoNaturalSize?.w || 9;
+    const nh = videoNaturalSize?.h || 16;
+    canvas.width = 160;
+    canvas.height = Math.round(160 * nh / nw);
     const ctx = canvas.getContext('2d');
     const frames = {};
 
@@ -542,9 +547,9 @@ export default function Home() {
                               <div key={i}
                                 className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors"
                                 onClick={() => jumpToTimestamp(row.timestamp)}>
-                                <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '60px', height: '190px' }}>
+                                <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '60px', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
                                   {capturedFrames[row.timestamp]
-                                    ? <img src={capturedFrames[row.timestamp]} alt={`Frame at ${row.timestamp}`} className="w-full h-full object-cover" />
+                                    ? <img src={capturedFrames[row.timestamp]} alt={`Frame at ${row.timestamp}`} className="w-full h-full object-contain" />
                                     : <div className="w-full h-full flex items-center justify-center">
                                         {capturingFrames
                                           ? <span className="text-xs text-gray-300">…</span>
@@ -585,27 +590,38 @@ export default function Home() {
                                 Copy all
                               </button>
                             </div>
-                            <div className="flex flex-col gap-3">
-                              {videoAnalysis.transferrable_copy.map((item, i) => (
-                                <div key={i} className="flex flex-col gap-1 py-2 border-b border-gray-50 last:border-0">
-                                  <p className="text-xs text-gray-400 italic leading-relaxed">"{item.original}"</p>
-                                  <p className="text-sm text-gray-800 leading-relaxed">{item.template}</p>
-                                </div>
-                              ))}
-                            </div>
+                            <p className="text-sm text-gray-800 leading-relaxed">
+                              {videoAnalysis.transferrable_copy.map(item => item.template).join(' ')}
+                            </p>
                           </div>
                         )}
 
                         {videoAnalysis.broll_shots?.length > 0 && (
                           <div className="bg-white border border-gray-200 rounded-xl p-5">
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
-                            <div className="flex flex-col gap-2">
-                              {videoAnalysis.broll_shots.map((shot, i) => (
-                                <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                                  <span className="w-5 h-5 rounded-full bg-green-50 text-green-600 text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-medium">{i + 1}</span>
-                                  <p className="text-sm text-gray-700 leading-relaxed">{shot}</p>
-                                </div>
-                              ))}
+                            <div className="flex flex-col">
+                              {videoAnalysis.broll_shots.map((shot, i) => {
+                                const ts = shot.timestamp || (typeof shot === 'string' ? null : null);
+                                const desc = shot.description ?? shot;
+                                const frame = ts ? capturedFrames[ts] : null;
+                                return (
+                                  <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/50 transition-colors -mx-5 px-5"
+                                    onClick={() => ts && jumpToTimestamp(ts)}>
+                                    <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100"
+                                      style={{ width: '48px', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
+                                      {frame
+                                        ? <img src={frame} alt={`B-roll at ${ts}`} className="w-full h-full object-contain" />
+                                        : <div className="w-full h-full flex items-center justify-center">
+                                            <span className="text-gray-300 text-xs font-mono">{ts || '—'}</span>
+                                          </div>}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      {ts && <span className="text-xs font-mono text-blue-500 block mb-0.5">{ts}</span>}
+                                      <p className="text-sm text-gray-700 leading-relaxed">{desc}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -616,7 +632,8 @@ export default function Home() {
                   <div style={{ position: 'sticky', top: '24px' }}>
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: '360px' }} />
-                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }} />
+                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
+        onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
                       <div className="px-4 py-3 border-t border-gray-100">
                         <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
                       </div>
