@@ -73,8 +73,18 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "title": "Short label e.g. Always opens with a mirror selfie",
       "observation": "What this brand consistently does and why it likely works for their audience"
     }
+  ],
+  "key_frames": [
+    {
+      "video_index": 0,
+      "timestamp": "00:00:03",
+      "visual": "Exact description of what is on screen at this moment",
+      "shoot_direction": "Production direction for recreating this shot e.g. Position camera at waist height, talent in fitted white dress against neutral wall, natural window light from the left"
+    }
   ]
-}`
+}
+
+IMPORTANT for key_frames: select exactly 4-5 frames per video that are the most visually distinct and strategically important moments — the hook frame, a strong product shot, a key emotion or reaction, a text overlay moment, and the CTA or closing frame. Each must have a specific actionable shoot_direction a content producer can follow on set.`
     });
 
     videoData.forEach((video, i) => {
