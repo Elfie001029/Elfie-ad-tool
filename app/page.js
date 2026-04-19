@@ -71,6 +71,8 @@ export default function Home() {
   // ── shot list (global cart)
   const [shotList, setShotList] = useState([]);
   const [shotListOpen, setShotListOpen] = useState(false);
+  const [briefNotes, setBriefNotes] = useState('');
+  const [pdfDownloading, setPdfDownloading] = useState(false);
 
   // ── library
   const [library, setLibrary] = useState([]);
@@ -199,13 +201,111 @@ export default function Home() {
   function updateShotListItem(id, field, value) {
     setShotList(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
   }
-  function copyBrief() {
-    const text = ['SHOT LIST', '', ...shotList.map((item, i) => [
-      `${i + 1}. [${item.source}]`,
-      `   ${item.annotation}`,
-      item.shootDirection ? `   ↳ Shoot: ${item.shootDirection}` : '',
-    ].filter(Boolean).join('\n'))].join('\n');
-    navigator.clipboard.writeText(text);
+  async function downloadPDF() {
+    setPdfDownloading(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 48;
+      const contentW = pageW - margin * 2;
+      let y = margin;
+
+      // Title + date
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(20, 20, 20);
+      doc.text('Shot List', margin, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(160, 160, 160);
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.text(dateStr, pageW - margin, y, { align: 'right' });
+      y += 28;
+
+      // Notes block
+      if (briefNotes.trim()) {
+        doc.setFontSize(10);
+        doc.setTextColor(80, 80, 80);
+        const noteLines = doc.splitTextToSize(briefNotes.trim(), contentW - 24);
+        const noteBlockH = noteLines.length * 14 + 20;
+        doc.setFillColor(248, 248, 248);
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(margin, y, contentW, noteBlockH, 4, 4, 'FD');
+        doc.text(noteLines, margin + 12, y + 14);
+        y += noteBlockH + 16;
+      }
+
+      // Divider
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.5);
+      doc.line(margin, y, pageW - margin, y);
+      y += 24;
+
+      // Shots
+      const thumbW = 56;
+      const thumbH = Math.round(thumbW * 16 / 9);
+      const textX = margin + thumbW + 16;
+      const textW = contentW - thumbW - 16;
+
+      for (let i = 0; i < shotList.length; i++) {
+        const item = shotList[i];
+        doc.setFontSize(10);
+        const annotationLines = doc.splitTextToSize(item.annotation || '', textW);
+        doc.setFontSize(9);
+        const shootLines = item.shootDirection ? doc.splitTextToSize('\u2192 Shoot: ' + item.shootDirection, textW) : [];
+        const textBlockH = 16 + annotationLines.length * 13 + (shootLines.length ? 8 + shootLines.length * 12 : 0);
+        const rowH = Math.max(thumbH + 24, textBlockH + 16);
+
+        if (y + rowH > pageH - margin) { doc.addPage(); y = margin; }
+
+        // number badge
+        doc.setFillColor(20, 20, 20);
+        doc.circle(margin + thumbW / 2, y + 8, 7, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(i + 1), margin + thumbW / 2, y + 11, { align: 'center' });
+
+        // thumbnail
+        if (item.thumbnail) {
+          try { doc.addImage(item.thumbnail, 'JPEG', margin, y + 18, thumbW, thumbH); } catch {}
+        }
+
+        // source
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(160, 160, 160);
+        doc.text(item.source || '', textX, y + 10);
+
+        // annotation
+        doc.setFontSize(10);
+        doc.setTextColor(30, 30, 30);
+        let textY = y + 24;
+        doc.text(annotationLines, textX, textY);
+        textY += annotationLines.length * 13;
+
+        // shoot direction
+        if (shootLines.length) {
+          textY += 8;
+          doc.setFontSize(9);
+          doc.setTextColor(37, 99, 235);
+          doc.text(shootLines, textX, textY);
+        }
+
+        // row separator
+        doc.setDrawColor(235, 235, 235);
+        doc.setLineWidth(0.5);
+        doc.line(margin, y + rowH - 6, pageW - margin, y + rowH - 6);
+        y += rowH;
+      }
+
+      doc.save('shot-list.pdf');
+    } finally {
+      setPdfDownloading(false);
+    }
   }
 
   // ── library helpers
@@ -315,6 +415,17 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Notes section — always visible */}
+          <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Brief notes</p>
+            <textarea
+              value={briefNotes}
+              onChange={e => setBriefNotes(e.target.value)}
+              placeholder="Add context, brand notes, or directions for the CP..."
+              className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-2.5 resize-none focus:outline-none focus:border-gray-400"
+              rows={4} />
+          </div>
+
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
             {shotList.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -351,13 +462,14 @@ export default function Home() {
             )}
           </div>
 
-          {shotList.length > 0 && (
-            <div className="p-4 border-t border-gray-200 flex-shrink-0">
-              <button onClick={copyBrief} className="w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors">
-                Copy brief
-              </button>
-            </div>
-          )}
+          <div className="p-4 border-t border-gray-200 flex-shrink-0">
+            <button
+              onClick={downloadPDF}
+              disabled={pdfDownloading || shotList.length === 0}
+              className="w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {pdfDownloading ? 'Generating PDF...' : 'Download PDF'}
+            </button>
+          </div>
         </div>
       </>
     );
