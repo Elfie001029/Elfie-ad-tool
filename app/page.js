@@ -16,16 +16,16 @@ const TYPE_COLORS = {
 };
 
 const SECTION_COLORS = {
-  'Hook': { bg: '#3b82f6', light: 'bg-blue-50', text: 'text-blue-700' },
-  'Opener': { bg: '#f97316', light: 'bg-orange-50', text: 'text-orange-700' },
-  'Personal story': { bg: '#ec4899', light: 'bg-pink-50', text: 'text-pink-700' },
-  'Pain point': { bg: '#ef4444', light: 'bg-red-50', text: 'text-red-700' },
-  'Competitor mention': { bg: '#eab308', light: 'bg-yellow-50', text: 'text-yellow-700' },
-  'Scientific facts': { bg: '#a855f7', light: 'bg-purple-50', text: 'text-purple-700' },
-  'Product introduction': { bg: '#22c55e', light: 'bg-green-50', text: 'text-green-700' },
-  'Social proof': { bg: '#14b8a6', light: 'bg-teal-50', text: 'text-teal-700' },
-  'Price or offer': { bg: '#f59e0b', light: 'bg-amber-50', text: 'text-amber-700' },
-  'CTA': { bg: '#6b7280', light: 'bg-gray-50', text: 'text-gray-700' },
+  'Hook':                { bg: '#3b82f6', light: 'bg-blue-50',   text: 'text-blue-700' },
+  'Opener':              { bg: '#f97316', light: 'bg-orange-50', text: 'text-orange-700' },
+  'Personal story':      { bg: '#ec4899', light: 'bg-pink-50',   text: 'text-pink-700' },
+  'Pain point':          { bg: '#ef4444', light: 'bg-red-50',    text: 'text-red-700' },
+  'Competitor mention':  { bg: '#eab308', light: 'bg-yellow-50', text: 'text-yellow-700' },
+  'Scientific facts':    { bg: '#a855f7', light: 'bg-purple-50', text: 'text-purple-700' },
+  'Product introduction':{ bg: '#22c55e', light: 'bg-green-50',  text: 'text-green-700' },
+  'Social proof':        { bg: '#14b8a6', light: 'bg-teal-50',   text: 'text-teal-700' },
+  'Price or offer':      { bg: '#f59e0b', light: 'bg-amber-50',  text: 'text-amber-700' },
+  'CTA':                 { bg: '#6b7280', light: 'bg-gray-50',   text: 'text-gray-700' },
 };
 
 function timestampToSeconds(ts) {
@@ -36,8 +36,34 @@ function timestampToSeconds(ts) {
   return parts[0];
 }
 
+function formatDate(iso) {
+  const d = new Date(iso);
+  const diff = Math.floor((Date.now() - d) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7) return `${diff}d ago`;
+  if (diff < 30) return `${Math.floor(diff / 7)}w ago`;
+  return `${Math.floor(diff / 30)}mo ago`;
+}
+
+function getLibrary() {
+  try { return JSON.parse(localStorage.getItem('adLibrary') || '[]'); } catch { return []; }
+}
+function persistLibrary(entries) {
+  localStorage.setItem('adLibrary', JSON.stringify(entries));
+}
+
 export default function Home() {
-  const [mode, setMode] = useState('single');
+  // ── nav
+  const [mode, setMode] = useState('library');
+
+  // ── library
+  const [library, setLibrary] = useState([]);
+  const [newAdBrand, setNewAdBrand] = useState('');
+  const [newAdType, setNewAdType] = useState('own');
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+
+  // ── analyze (single)
   const [activeTab, setActiveTab] = useState('analysis');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoContext, setVideoContext] = useState('');
@@ -46,24 +72,39 @@ export default function Home() {
   const [videoError, setVideoError] = useState('');
   const videoRef = useRef(null);
   const captureVideoRef = useRef(null);
-
   const [capturedFrames, setCapturedFrames] = useState({});
   const [capturingFrames, setCapturingFrames] = useState(false);
   const [openerFrame, setOpenerFrame] = useState(null);
   const [videoNaturalSize, setVideoNaturalSize] = useState(null);
 
-  const [myVideos, setMyVideos] = useState(['']);
-  const [competitorVideos, setCompetitorVideos] = useState(['']);
-  const [compareContext, setCompareContext] = useState('');
-  const [compareResult, setCompareResult] = useState(null);
-  const [comparingVideos, setComparingVideos] = useState(false);
-  const [compareError, setCompareError] = useState('');
+  // ── group analysis
+  const [groupUrls, setGroupUrls] = useState(['', '']);
+  const [groupContext, setGroupContext] = useState('');
+  const [groupResult, setGroupResult] = useState(null);
+  const [groupRunning, setGroupRunning] = useState(false);
+  const [groupError, setGroupError] = useState('');
 
+  // ── boot
+  useEffect(() => { setLibrary(getLibrary()); }, []);
+
+  // ── frame capture effects
+  useEffect(() => {
+    if (activeTab === 'framebyfrime' && videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) {
+      captureFrames();
+    }
+  }, [activeTab, videoAnalysis]);
+
+  useEffect(() => {
+    if (videoAnalysis?.general?.opener?.timestamp) captureOpenerFrame(videoAnalysis.general.opener.timestamp);
+  }, [videoAnalysis]);
+
+  // ── analyze
   async function analyzeVideo() {
     if (!videoUrl) return setVideoError('Please paste a video URL first.');
     setVideoError('');
     setCapturedFrames({});
     setOpenerFrame(null);
+    setShowSavePrompt(false);
     setAnalyzingVideo(true);
     setVideoAnalysis(null);
     setActiveTab('analysis');
@@ -76,29 +117,35 @@ export default function Home() {
       const data = await res.json();
       if (data.error) return setVideoError(data.error);
       setVideoAnalysis(data.analysis);
-    } catch (err) {
-      setVideoError('Something went wrong. Please try again.');
-    } finally {
-      setAnalyzingVideo(false);
-    }
+      setShowSavePrompt(true);
+    } catch { setVideoError('Something went wrong. Please try again.'); }
+    finally { setAnalyzingVideo(false); }
   }
 
-  useEffect(() => {
-    if (activeTab === 'framebyfrime' && videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) {
-      captureFrames();
-    }
-  }, [activeTab, videoAnalysis]);
+  // ── group analysis
+  async function runGroupAnalysis() {
+    const filled = groupUrls.filter(u => u.trim());
+    if (filled.length < 2) return setGroupError('Add at least 2 video URLs.');
+    setGroupError('');
+    setGroupRunning(true);
+    setGroupResult(null);
+    try {
+      const res = await fetch('/api/group-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoUrls: filled, context: groupContext }),
+      });
+      const data = await res.json();
+      if (data.error) return setGroupError(data.error);
+      setGroupResult(data.result);
+    } catch { setGroupError('Something went wrong. Please try again.'); }
+    finally { setGroupRunning(false); }
+  }
 
-  useEffect(() => {
-    if (videoAnalysis?.general?.opener?.timestamp) {
-      captureOpenerFrame(videoAnalysis.general.opener.timestamp);
-    }
-  }, [videoAnalysis]);
-
+  // ── frame capture helpers
   async function captureOpenerFrame(timestamp) {
     const video = captureVideoRef.current;
     if (!video) return;
-    const seconds = timestampToSeconds(timestamp);
     const canvas = document.createElement('canvas');
     const nw = videoNaturalSize?.w || 9;
     const nh = videoNaturalSize?.h || 16;
@@ -106,29 +153,21 @@ export default function Home() {
     canvas.height = Math.round(540 * nh / nw);
     const ctx = canvas.getContext('2d');
     await new Promise(resolve => {
-      video.currentTime = seconds;
+      video.currentTime = timestampToSeconds(timestamp);
       video.addEventListener('seeked', function onSeeked() {
         video.removeEventListener('seeked', onSeeked);
-        if (video.readyState >= 2) {
-          resolve();
-        } else {
-          video.addEventListener('canplay', resolve, { once: true });
-        }
+        if (video.readyState >= 2) resolve();
+        else video.addEventListener('canplay', resolve, { once: true });
       }, { once: true });
     });
-    try {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      setOpenerFrame(canvas.toDataURL('image/jpeg', 0.85));
-    } catch (e) {
-      setOpenerFrame(null);
-    }
+    try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); setOpenerFrame(canvas.toDataURL('image/jpeg', 0.85)); }
+    catch { setOpenerFrame(null); }
   }
 
   async function captureFrames() {
     if (!captureVideoRef.current || !videoAnalysis?.timeline?.length) return;
     setCapturingFrames(true);
     setCapturedFrames({});
-
     const video = captureVideoRef.current;
     const canvas = document.createElement('canvas');
     const nw = videoNaturalSize?.w || 9;
@@ -137,93 +176,94 @@ export default function Home() {
     canvas.height = Math.round(160 * nh / nw);
     const ctx = canvas.getContext('2d');
     const frames = {};
-
     for (const row of videoAnalysis.timeline) {
-      const seconds = timestampToSeconds(row.timestamp);
       await new Promise(resolve => {
         function captureAndResolve() {
-          try {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            frames[row.timestamp] = canvas.toDataURL('image/jpeg', 0.7);
-          } catch (e) {
-            frames[row.timestamp] = null;
-          }
+          try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); frames[row.timestamp] = canvas.toDataURL('image/jpeg', 0.7); }
+          catch { frames[row.timestamp] = null; }
           setCapturedFrames({ ...frames });
           resolve();
         }
-        video.currentTime = seconds;
+        video.currentTime = timestampToSeconds(row.timestamp);
         video.addEventListener('seeked', function onSeeked() {
           video.removeEventListener('seeked', onSeeked);
-          if (video.readyState >= 2) {
-            captureAndResolve();
-          } else {
-            video.addEventListener('canplay', captureAndResolve, { once: true });
-          }
+          if (video.readyState >= 2) captureAndResolve();
+          else video.addEventListener('canplay', captureAndResolve, { once: true });
         }, { once: true });
       });
     }
-
     setCapturingFrames(false);
   }
 
+  // ── library helpers
+  async function saveAnalysis() {
+    const entry = {
+      id: Date.now().toString(),
+      type: 'single',
+      brand: newAdBrand.trim() || 'Untagged',
+      adType: newAdType,
+      dateAdded: new Date().toISOString(),
+      thumbnail: null,
+      url: videoUrl,
+      analysis: videoAnalysis,
+    };
+    const video = captureVideoRef.current;
+    if (video) {
+      try {
+        const canvas = document.createElement('canvas');
+        const nw = videoNaturalSize?.w || 9;
+        const nh = videoNaturalSize?.h || 16;
+        canvas.width = 300;
+        canvas.height = Math.round(300 * nh / nw);
+        const ctx = canvas.getContext('2d');
+        await new Promise(resolve => {
+          video.currentTime = 0;
+          video.addEventListener('seeked', function onSeeked() {
+            video.removeEventListener('seeked', onSeeked);
+            try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); } catch {}
+            resolve();
+          }, { once: true });
+        });
+        entry.thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+      } catch {}
+    }
+    const updated = [entry, ...getLibrary()];
+    persistLibrary(updated);
+    setLibrary(updated);
+    setShowSavePrompt(false);
+    setNewAdBrand('');
+    setNewAdType('own');
+  }
+
+  function openFromLibrary(entry) {
+    setVideoUrl(entry.url);
+    setVideoAnalysis(entry.analysis);
+    setShowSavePrompt(false);
+    setCapturedFrames({});
+    setOpenerFrame(null);
+    setActiveTab('analysis');
+    setMode('analyze');
+  }
+
+  function deleteEntry(id) {
+    const updated = getLibrary().filter(e => e.id !== id);
+    persistLibrary(updated);
+    setLibrary(updated);
+  }
+
   function jumpToTimestamp(ts) {
-    if (videoRef.current) {
-      videoRef.current.currentTime = timestampToSeconds(ts);
-      videoRef.current.play();
-    }
+    if (videoRef.current) { videoRef.current.currentTime = timestampToSeconds(ts); videoRef.current.play(); }
   }
 
-  function addVideo(side) {
-    if (side === 'my' && myVideos.length < 3) setMyVideos([...myVideos, '']);
-    if (side === 'competitor' && competitorVideos.length < 3) setCompetitorVideos([...competitorVideos, '']);
-  }
+  const existingBrands = [...new Set(library.map(e => e.brand).filter(Boolean))];
+  const brandGroups = existingBrands.reduce((acc, brand) => {
+    acc[brand] = library.filter(e => e.brand === brand);
+    return acc;
+  }, {});
+  const untagged = library.filter(e => !existingBrands.includes(e.brand) || e.brand === 'Untagged');
+  if (untagged.length) brandGroups['Untagged'] = untagged;
 
-  function removeVideo(side, index) {
-    if (side === 'my') setMyVideos(myVideos.filter((_, i) => i !== index));
-    if (side === 'competitor') setCompetitorVideos(competitorVideos.filter((_, i) => i !== index));
-  }
-
-  function updateVideo(side, index, value) {
-    if (side === 'my') {
-      const updated = [...myVideos];
-      updated[index] = value;
-      setMyVideos(updated);
-    }
-    if (side === 'competitor') {
-      const updated = [...competitorVideos];
-      updated[index] = value;
-      setCompetitorVideos(updated);
-    }
-  }
-
-  async function compareVideos() {
-    const myFilled = myVideos.filter(v => v.trim());
-    const competitorFilled = competitorVideos.filter(v => v.trim());
-    if (myFilled.length === 0) return setCompareError('Please add at least one video on your side.');
-    if (competitorFilled.length === 0) return setCompareError('Please add at least one competitor video.');
-    setCompareError('');
-    setComparingVideos(true);
-    setCompareResult(null);
-    try {
-      const res = await fetch('/api/compare-videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          myVideos: myFilled,
-          competitorVideos: competitorFilled,
-          context: compareContext,
-        }),
-      });
-      const data = await res.json();
-      if (data.error) return setCompareError(data.error);
-      setCompareResult(data.result);
-    } catch (err) {
-      setCompareError('Something went wrong. Please try again.');
-    } finally {
-      setComparingVideos(false);
-    }
-  }
-
+  // ── sub-components
   function AdStructureBar({ data, duration, brandReveal, productReveal }) {
     if (!data?.length) return null;
     const totalSeconds = timestampToSeconds(duration) || 60;
@@ -233,28 +273,13 @@ export default function Home() {
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Ad structure</p>
         <div className="relative mb-1" style={{ height: '20px' }}>
-          {brandReveal && (
-            <div className="absolute flex flex-col items-center" style={{ left: `${brandPct}%`, transform: 'translateX(-50%)' }}>
-              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">brand</span>
-            </div>
-          )}
-          {productReveal && Math.abs(productPct - brandPct) > 5 && (
-            <div className="absolute flex flex-col items-center" style={{ left: `${productPct}%`, transform: 'translateX(-50%)' }}>
-              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">product</span>
-            </div>
-          )}
+          {brandReveal && <div className="absolute flex flex-col items-center" style={{ left: `${brandPct}%`, transform: 'translateX(-50%)' }}><span className="text-xs text-gray-400 font-mono whitespace-nowrap">brand</span></div>}
+          {productReveal && Math.abs(productPct - brandPct) > 5 && <div className="absolute flex flex-col items-center" style={{ left: `${productPct}%`, transform: 'translateX(-50%)' }}><span className="text-xs text-gray-400 font-mono whitespace-nowrap">product</span></div>}
         </div>
         <div className="relative h-10 flex rounded-lg overflow-hidden mb-1 gap-px">
-          {data.map((section, i) => {
-            const start = timestampToSeconds(section.start);
-            const end = timestampToSeconds(section.end);
-            const width = ((end - start) / totalSeconds) * 100;
-            const color = SECTION_COLORS[section.section]?.bg || '#6b7280';
-            return (
-              <button key={i} onClick={() => jumpToTimestamp(section.start)}
-                style={{ width: `${Math.max(width, 1)}%`, backgroundColor: color }}
-                className="hover:opacity-75 transition-opacity relative" title={`${section.section} (${section.start})`} />
-            );
+          {data.map((s, i) => {
+            const w = ((timestampToSeconds(s.end) - timestampToSeconds(s.start)) / totalSeconds) * 100;
+            return <button key={i} onClick={() => jumpToTimestamp(s.start)} style={{ width: `${Math.max(w, 1)}%`, backgroundColor: SECTION_COLORS[s.section]?.bg || '#6b7280' }} className="hover:opacity-75 transition-opacity" title={`${s.section} (${s.start})`} />;
           })}
           {brandReveal && <div className="absolute top-0 bottom-0 w-px bg-white opacity-90 pointer-events-none" style={{ left: `${brandPct}%` }} />}
           {productReveal && <div className="absolute top-0 bottom-0 w-px bg-white opacity-90 pointer-events-none" style={{ left: `${productPct}%` }} />}
@@ -264,14 +289,13 @@ export default function Home() {
           {productReveal && Math.abs(productPct - brandPct) > 5 && <div className="absolute" style={{ left: `${productPct}%`, transform: 'translateX(-50%)' }}><span className="text-xs font-mono text-gray-400">{productReveal}</span></div>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {data.map((section, i) => {
-            const colors = SECTION_COLORS[section.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: '#6b7280' };
+          {data.map((s, i) => {
+            const colors = SECTION_COLORS[s.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: '#6b7280' };
             return (
-              <button key={i} onClick={() => jumpToTimestamp(section.start)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${colors.light} hover:opacity-80 transition-opacity`}>
+              <button key={i} onClick={() => jumpToTimestamp(s.start)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${colors.light} hover:opacity-80 transition-opacity`}>
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: colors.bg }} />
-                <span className={`text-xs font-medium ${colors.text}`}>{section.section}</span>
-                <span className="text-xs text-gray-400 font-mono">{section.start}</span>
+                <span className={`text-xs font-medium ${colors.text}`}>{s.section}</span>
+                <span className="text-xs text-gray-400 font-mono">{s.start}</span>
               </button>
             );
           })}
@@ -280,114 +304,85 @@ export default function Home() {
     );
   }
 
-  function CompareAdStructureBars({ mine, competitor }) {
-    if (!mine?.length && !competitor?.length) return null;
-    const allSections = [...(mine || []), ...(competitor || [])];
-    const maxPct = allSections.reduce((max, s) => Math.max(max, s.percentage || 0), 0);
-    const total = (arr) => arr?.reduce((sum, s) => sum + (s.percentage || 0), 0) || 100;
-
-    function renderBar(data, label, colorClass) {
-      if (!data?.length) return null;
-      const t = total(data);
-      return (
-        <div className="mb-3">
-          <p className={`text-xs font-medium mb-1 ${colorClass}`}>{label}</p>
-          <div className="flex h-8 rounded-lg overflow-hidden gap-px">
-            {data.map((section, i) => {
-              const color = SECTION_COLORS[section.section]?.bg || '#6b7280';
-              const width = ((section.percentage || 0) / t) * 100;
-              return (
-                <div key={i} style={{ width: `${Math.max(width, 1)}%`, backgroundColor: color }}
-                  className="relative" title={`${section.section} ${section.percentage}%`} />
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
+  function LibraryCard({ entry }) {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Ad structure comparison</p>
-        {renderBar(mine, 'My ads', 'text-blue-600')}
-        {renderBar(competitor, 'Competitor ads', 'text-purple-600')}
-        <div className="flex flex-wrap gap-2 mt-3">
-          {Object.entries(SECTION_COLORS).map(([name, colors]) => (
-            <span key={name} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.bg }} />
-              {name}
-            </span>
-          ))}
+      <div className="relative group rounded-xl overflow-hidden bg-white border border-gray-200 cursor-pointer">
+        <div className="bg-gray-100 overflow-hidden" style={{ aspectRatio: '9/16' }}>
+          {entry.thumbnail
+            ? <img src={entry.thumbnail} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center"><span className="text-xs text-gray-300">no preview</span></div>}
+        </div>
+        <div className="p-3">
+          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${entry.adType === 'own' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+            {entry.adType === 'own' ? 'Own' : 'Competitor'}
+          </span>
+          <p className="text-xs text-gray-400 mt-1">{formatDate(entry.dateAdded)}</p>
+        </div>
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
+          <button onClick={() => openFromLibrary(entry)} className="w-full bg-white text-gray-900 text-sm font-medium py-2 rounded-lg hover:bg-gray-100 transition-colors">Open</button>
+          <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id); }} className="w-full bg-white/10 text-white text-sm py-2 rounded-lg hover:bg-white/20 transition-colors">Delete</button>
         </div>
       </div>
     );
   }
 
-  function VideoInputList({ side, videos }) {
-    const label = side === 'my' ? 'My ads' : 'Competitor ads';
-    const accent = side === 'my' ? 'text-blue-600' : 'text-purple-600';
-    const accentBg = side === 'my' ? 'bg-blue-50' : 'bg-purple-50';
-    const accentBorder = side === 'my' ? 'border-blue-200' : 'border-purple-200';
-    return (
-      <div className={`border ${accentBorder} rounded-xl p-4 ${accentBg}`}>
-        <p className={`text-xs font-medium uppercase tracking-wider mb-3 ${accent}`}>{label}</p>
-        <div className="flex flex-col gap-2 mb-3">
-          {videos.map((url, i) => (
-            <div key={i} className="flex gap-2 items-center">
-              <input type="text" value={url} onChange={e => updateVideo(side, i, e.target.value)}
-                placeholder="https://file.swipekit.app/fb-xxx.mp4"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-900 bg-white focus:outline-none focus:border-gray-400" />
-              {videos.length > 1 && (
-                <button onClick={() => removeVideo(side, i)} className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0">×</button>
-              )}
-            </div>
-          ))}
+  // ── render
+  return (
+    <main className="min-h-screen bg-gray-50">
+
+      {/* Nav */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-8">
+          <h1 className="text-sm font-semibold text-gray-900 tracking-tight">Ad Intelligence</h1>
+          <nav className="flex gap-1">
+            {[{ id: 'library', label: 'Library' }, { id: 'analyze', label: 'Analyze' }, { id: 'group', label: 'Group Analysis' }].map(tab => (
+              <button key={tab.id} onClick={() => setMode(tab.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === tab.id ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
-        {videos.length < 3 && (
-          <button onClick={() => addVideo(side)} className="text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full bg-white hover:bg-gray-50 transition-colors">
-            + Add video
+        {mode === 'library' && (
+          <button onClick={() => setMode('analyze')} className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+            + Add ad
           </button>
         )}
       </div>
-    );
-  }
 
-  function SectionDivider({ label }) {
-    return (
-      <div className="flex items-center gap-3 py-1">
-        <div className="w-1 h-5 bg-gray-900 rounded-full flex-shrink-0" />
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
-      </div>
-    );
-  }
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
-  return (
-    <main className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-6xl mx-auto">
+        {/* ── LIBRARY ───────────────────────────────────────────── */}
+        {mode === 'library' && (
+          <div>
+            {library.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32 text-center">
+                <p className="text-sm font-medium text-gray-900 mb-2">Your library is empty</p>
+                <p className="text-xs text-gray-400 mb-6">Analyze a video ad and save it to build your library.</p>
+                <button onClick={() => setMode('analyze')} className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">Analyze your first ad</button>
+              </div>
+            ) : (
+              Object.entries(brandGroups).map(([brand, entries]) => !entries.length ? null : (
+                <div key={brand} className="mb-12">
+                  <div className="flex items-center gap-3 mb-5">
+                    <p className="text-xs font-semibold text-gray-900 uppercase tracking-widest">{brand}</p>
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-xs text-gray-400">{entries.length} {entries.length === 1 ? 'ad' : 'ads'}</span>
+                  </div>
+                  <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                    {entries.map(entry => <LibraryCard key={entry.id} entry={entry} />)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
-        <div className="mb-8">
-          <h1 className="text-2xl font-medium text-gray-900">Ad Library Intelligence</h1>
-          <p className="text-sm text-gray-500 mt-1">Analyze competitor video ads with AI</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button onClick={() => setMode('single')}
-            className={`p-4 rounded-xl border text-left transition-colors ${mode === 'single' ? 'border-gray-900 bg-white' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-            <p className={`text-sm font-medium mb-1 ${mode === 'single' ? 'text-gray-900' : 'text-gray-500'}`}>Single video</p>
-            <p className="text-xs text-gray-400">Analyze one video ad in depth</p>
-          </button>
-          <button onClick={() => setMode('compare')}
-            className={`p-4 rounded-xl border text-left transition-colors ${mode === 'compare' ? 'border-gray-900 bg-white' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-            <p className={`text-sm font-medium mb-1 ${mode === 'compare' ? 'text-gray-900' : 'text-gray-500'}`}>Group comparison</p>
-            <p className="text-xs text-gray-400">Compare your ads vs competitor ads</p>
-          </button>
-        </div>
-
-        {/* Single video mode */}
-        {mode === 'single' && (
+        {/* ── ANALYZE ───────────────────────────────────────────── */}
+        {mode === 'analyze' && (
           <div className="flex flex-col gap-4">
             <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Video analysis</p>
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Single video analysis</p>
               <p className="text-sm text-gray-600 mb-4">
                 Find a video ad on{' '}
                 <a href="https://www.swipekit.app" target="_blank" className="text-blue-500 hover:underline">swipekit.app</a>
@@ -409,10 +404,31 @@ export default function Home() {
               </div>
               <button onClick={analyzeVideo} disabled={analyzingVideo}
                 className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {analyzingVideo ? 'Analyzing video... this takes 1-2 minutes' : 'Analyze video'}
+                {analyzingVideo ? 'Analyzing video… this takes 1-2 minutes' : 'Analyze video'}
               </button>
               {videoError && <div className="mt-3 bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{videoError}</div>}
             </div>
+
+            {/* Save prompt */}
+            {showSavePrompt && videoAnalysis && (
+              <div className="bg-gray-900 rounded-xl p-4 flex items-center gap-4 flex-wrap">
+                <p className="text-sm font-medium text-white whitespace-nowrap">Save to library</p>
+                <input value={newAdBrand} onChange={e => setNewAdBrand(e.target.value)} list="brand-suggestions"
+                  placeholder="Brand name…"
+                  className="border border-white/20 bg-white/10 text-white placeholder-white/40 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-white/50 w-44" />
+                <datalist id="brand-suggestions">{existingBrands.map(b => <option key={b} value={b} />)}</datalist>
+                <div className="flex gap-1 bg-white/10 rounded-lg p-1">
+                  {['own', 'competitor'].map(t => (
+                    <button key={t} onClick={() => setNewAdType(t)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${newAdType === t ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={saveAnalysis} className="bg-white text-gray-900 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors ml-auto">Save</button>
+                <button onClick={() => setShowSavePrompt(false)} className="text-white/40 hover:text-white text-xl leading-none">×</button>
+              </div>
+            )}
 
             {videoAnalysis && (
               <>
@@ -429,22 +445,18 @@ export default function Home() {
 
                 <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
                   <div className="flex flex-col gap-4">
-
                     {activeTab === 'analysis' && (
                       <>
                         <div className="bg-white border border-gray-200 rounded-xl p-6">
                           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
                           <div className="flex gap-4 mb-4">
                             {openerFrame && (
-                              <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer"
-                                style={{ width: '72px', height: '128px' }}
+                              <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer" style={{ width: '72px', height: '128px' }}
                                 onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
                                 <img src={openerFrame} alt="Opener frame" className="w-full h-full object-cover" />
                               </div>
                             )}
-                            <p className="text-2xl font-medium text-gray-900 leading-snug">
-                              "{videoAnalysis.general?.hook?.copy}"
-                            </p>
+                            <p className="text-2xl font-medium text-gray-900 leading-snug">"{videoAnalysis.general?.hook?.copy}"</p>
                           </div>
                           <div className="border-t border-gray-100 pt-4">
                             <p className="text-xs text-gray-400 mb-1">Visual opener</p>
@@ -456,12 +468,8 @@ export default function Home() {
                           </div>
                         </div>
 
-                        <AdStructureBar
-                          data={videoAnalysis.general?.ad_structure}
-                          duration={videoAnalysis.general?.duration}
-                          brandReveal={videoAnalysis.general?.brand_reveal?.timestamp}
-                          productReveal={videoAnalysis.general?.product_reveal?.timestamp}
-                        />
+                        <AdStructureBar data={videoAnalysis.general?.ad_structure} duration={videoAnalysis.general?.duration}
+                          brandReveal={videoAnalysis.general?.brand_reveal?.timestamp} productReveal={videoAnalysis.general?.product_reveal?.timestamp} />
 
                         <div className="grid grid-cols-2 gap-3">
                           {[
@@ -537,23 +545,17 @@ export default function Home() {
                             <p className="text-xs text-gray-400 mt-0.5">
                               {capturingFrames
                                 ? `Capturing ${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length}…`
-                                : Object.keys(capturedFrames).length > 0
-                                  ? `${Object.keys(capturedFrames).length} frames captured`
-                                  : 'Click any frame to jump to that moment'}
+                                : Object.keys(capturedFrames).length > 0 ? `${Object.keys(capturedFrames).length} frames captured` : 'Click any frame to jump to that moment'}
                             </p>
                           </div>
                           <div className="divide-y divide-gray-50">
                             {videoAnalysis.timeline?.map((row, i) => (
-                              <div key={i}
-                                className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors"
-                                onClick={() => jumpToTimestamp(row.timestamp)}>
+                              <div key={i} className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors" onClick={() => jumpToTimestamp(row.timestamp)}>
                                 <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '60px', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
                                   {capturedFrames[row.timestamp]
-                                    ? <img src={capturedFrames[row.timestamp]} alt={`Frame at ${row.timestamp}`} className="w-full h-full object-contain" />
+                                    ? <img src={capturedFrames[row.timestamp]} alt="" className="w-full h-full object-contain" />
                                     : <div className="w-full h-full flex items-center justify-center">
-                                        {capturingFrames
-                                          ? <span className="text-xs text-gray-300">…</span>
-                                          : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}
+                                        {capturingFrames ? <span className="text-xs text-gray-300">…</span> : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}
                                       </div>}
                                 </div>
                                 <div className="flex-1 min-w-0 py-0.5">
@@ -584,14 +586,13 @@ export default function Home() {
                           <div className="bg-white border border-gray-200 rounded-xl p-5">
                             <div className="flex items-center justify-between mb-3">
                               <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
-                              <button
-                                onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(item => item.template).join('\n'))}
+                              <button onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(i => i.template).join('\n'))}
                                 className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50 transition-colors">
                                 Copy all
                               </button>
                             </div>
                             <p className="text-sm text-gray-800 leading-relaxed">
-                              {videoAnalysis.transferrable_copy.map(item => item.template).join(' ')}
+                              {videoAnalysis.transferrable_copy.map(i => i.template).join(' ')}
                             </p>
                           </div>
                         )}
@@ -601,19 +602,16 @@ export default function Home() {
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
                             <div className="flex flex-col">
                               {videoAnalysis.broll_shots.map((shot, i) => {
-                                const ts = shot.timestamp || (typeof shot === 'string' ? null : null);
+                                const ts = shot.timestamp || null;
                                 const desc = shot.description ?? shot;
                                 const frame = ts ? capturedFrames[ts] : null;
                                 return (
                                   <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/50 transition-colors -mx-5 px-5"
                                     onClick={() => ts && jumpToTimestamp(ts)}>
-                                    <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100"
-                                      style={{ width: '48px', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
+                                    <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100" style={{ width: '48px', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
                                       {frame
-                                        ? <img src={frame} alt={`B-roll at ${ts}`} className="w-full h-full object-contain" />
-                                        : <div className="w-full h-full flex items-center justify-center">
-                                            <span className="text-gray-300 text-xs font-mono">{ts || '—'}</span>
-                                          </div>}
+                                        ? <img src={frame} alt="" className="w-full h-full object-contain" />
+                                        : <div className="w-full h-full flex items-center justify-center"><span className="text-gray-300 text-xs font-mono">{ts || '—'}</span></div>}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       {ts && <span className="text-xs font-mono text-blue-500 block mb-0.5">{ts}</span>}
@@ -629,11 +627,12 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div style={{ position: 'sticky', top: '24px' }}>
+                  <div style={{ position: 'sticky', top: '80px' }}>
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: '360px' }} />
-                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
-        onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
+                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`}
+                        crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
+                        onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
                       <div className="px-4 py-3 border-t border-gray-100">
                         <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
                       </div>
@@ -645,201 +644,147 @@ export default function Home() {
           </div>
         )}
 
-        {/* Group comparison mode */}
-        {mode === 'compare' && (
+        {/* ── GROUP ANALYSIS ────────────────────────────────────── */}
+        {mode === 'group' && (
           <div className="flex flex-col gap-4">
             <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Group comparison</p>
-              <p className="text-sm text-gray-600 mb-4">
-                Add up to 3 video URLs on each side. AI will identify what your ads are missing compared to your competitors.
-              </p>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <VideoInputList side="my" videos={myVideos} />
-                <VideoInputList side="competitor" videos={competitorVideos} />
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Group analysis</p>
+              <p className="text-sm text-gray-600 mb-4">Add 2–6 video URLs from the same brand or trend. AI will find what they have in common.</p>
+              <div className="flex flex-col gap-2 mb-3">
+                {groupUrls.map((url, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input type="text" value={url} onChange={e => { const u = [...groupUrls]; u[i] = e.target.value; setGroupUrls(u); }}
+                      placeholder="https://file.swipekit.app/fb-xxx.mp4"
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-gray-900 focus:outline-none focus:border-gray-400" />
+                    {groupUrls.length > 2 && (
+                      <button onClick={() => setGroupUrls(groupUrls.filter((_, j) => j !== i))} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                    )}
+                  </div>
+                ))}
               </div>
+              {groupUrls.length < 6 && (
+                <button onClick={() => setGroupUrls([...groupUrls, ''])}
+                  className="text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full bg-white hover:bg-gray-50 transition-colors mb-3">
+                  + Add video
+                </button>
+              )}
               <div className="mb-4">
                 <label className="block text-xs text-gray-500 mb-1">Context (optional)</label>
-                <input type="text" value={compareContext} onChange={e => setCompareContext(e.target.value)}
-                  placeholder="e.g. Both are DTC weight loss brands targeting women 25-40"
+                <input type="text" value={groupContext} onChange={e => setGroupContext(e.target.value)}
+                  placeholder="e.g. Hims hair loss ads — Q4 2024 batch"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-gray-400" />
               </div>
-              <button onClick={compareVideos} disabled={comparingVideos}
+              <button onClick={runGroupAnalysis} disabled={groupRunning}
                 className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {comparingVideos ? 'Comparing videos... this may take a few minutes' : 'Compare ads'}
+                {groupRunning ? 'Analyzing… this may take a few minutes' : 'Run group analysis'}
               </button>
-              {compareError && <div className="mt-3 bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{compareError}</div>}
+              {groupError && <div className="mt-3 bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{groupError}</div>}
             </div>
 
-            {compareResult && (
+            {groupResult && (
               <div className="flex flex-col gap-4">
 
-                {/* 1. Hook & opener */}
-                <SectionDivider label="1 — Hook & opener" />
-                {compareResult.hook && (
+                {/* Common hooks */}
+                {groupResult.common_hooks?.length > 0 && (
                   <div className="flex flex-col gap-3">
-                    {compareResult.hook.competitor_hooks?.map((h, i) => (
-                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-6">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Competitor hook {compareResult.hook.competitor_hooks.length > 1 ? i + 1 : ''}</p>
-                        <p className="text-2xl font-medium text-gray-900 leading-snug mb-3">"{h.copy}"</p>
-                        <p className="text-xs text-gray-500 leading-relaxed">{h.strategy}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Common hooks</p>
+                    {groupResult.common_hooks.map((h, i) => (
+                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-5">
+                        <p className="text-xl font-medium text-gray-900 leading-snug mb-2">"{h.copy}"</p>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Appears in {h.appears_in} ads</span>
+                          <p className="text-xs text-gray-500">{h.strategy}</p>
+                        </div>
                       </div>
                     ))}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                        <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-2">Our hooks</p>
-                        {compareResult.hook.my_hooks?.map((h, i) => (
-                          <p key={i} className="text-sm text-blue-900 leading-relaxed mb-1">"{h.copy}"</p>
-                        ))}
-                      </div>
-                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-                        <p className="text-xs font-medium text-purple-600 uppercase tracking-wider mb-2">Analysis</p>
-                        <p className="text-xs text-purple-900 leading-relaxed">{compareResult.hook.analysis}</p>
-                      </div>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                      <p className="text-xs font-medium text-amber-700 uppercase tracking-wider mb-1">Gap</p>
-                      <p className="text-sm text-amber-800 leading-relaxed">{compareResult.hook.gap}</p>
-                    </div>
                   </div>
                 )}
 
-                {/* 2. Ad structure */}
-                <SectionDivider label="2 — Ad structure" />
-                <CompareAdStructureBars
-                  mine={compareResult.ad_structure?.my_average}
-                  competitor={compareResult.ad_structure?.competitor_average}
-                />
-                {compareResult.ad_structure?.gap && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                    <p className="text-xs font-medium text-amber-700 uppercase tracking-wider mb-1">Gap</p>
-                    <p className="text-sm text-amber-800 leading-relaxed">{compareResult.ad_structure.gap}</p>
-                  </div>
-                )}
-
-                {/* 3. Buzz words */}
-                <SectionDivider label="3 — Buzz words" />
-                {compareResult.buzz_words?.length > 0 && (
+                {/* Keyword clusters */}
+                {groupResult.keyword_clusters?.length > 0 && (
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Words competitors always use</p>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Keyword clusters</p>
                     <div className="flex flex-wrap gap-2">
-                      {compareResult.buzz_words.map((item, i) => (
-                        <span key={i} className={`bg-gray-100 text-gray-800 px-3 py-1 rounded-full font-medium ${item.frequency === 'high' ? 'text-base' : item.frequency === 'medium' ? 'text-sm' : 'text-xs'}`}>
-                          {item.word}
+                      {groupResult.keyword_clusters.map((k, i) => (
+                        <span key={i} className={`bg-gray-100 text-gray-800 px-3 py-1 rounded-full font-medium ${k.frequency === 'high' ? 'text-base' : k.frequency === 'medium' ? 'text-sm' : 'text-xs'}`}>
+                          {k.word}
                         </span>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* 4. Stats */}
-                <SectionDivider label="4 — Stats comparison" />
-                {compareResult.stats && (
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { label: 'Avg duration', mine: compareResult.stats.my_avg_duration, comp: compareResult.stats.competitor_avg_duration },
-                      { label: 'Avg cuts', mine: compareResult.stats.my_avg_cuts, comp: compareResult.stats.competitor_avg_cuts },
-                      { label: 'Brand reveal', mine: compareResult.stats.my_brand_reveal, comp: compareResult.stats.competitor_brand_reveal },
-                      { label: 'Product reveal', mine: compareResult.stats.my_product_reveal, comp: compareResult.stats.competitor_product_reveal },
-                    ].map(stat => (
-                      <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-                        <p className="text-xs text-gray-400 mb-2">{stat.label}</p>
-                        <p className="text-lg font-medium text-blue-600 mb-1">{stat.mine ?? '—'}</p>
-                        <p className="text-xs text-gray-400">comp: {stat.comp ?? '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Top 3 priorities */}
-                <SectionDivider label="Top 3 priorities" />
-                {compareResult.top3?.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    {compareResult.top3.map((item, i) => (
-                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
-                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">{item.priority}</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 mb-1">{item.title}</p>
-                          <p className="text-sm text-gray-500 leading-relaxed">{item.action}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 5. Value propositions */}
-                <SectionDivider label="5 — Value propositions" />
-                {compareResult.value_propositions?.length > 0 && (
+                {/* Visual pattern */}
+                {groupResult.visual_pattern && (
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">What competitors mention that we don't</p>
-                    <div className="flex flex-col">
-                      {compareResult.value_propositions.map((vp, i) => (
-                        <div key={i} className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${vp.mine_has ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                            {vp.mine_has ? '✓' : '✕'}
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Visual pattern</p>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { label: 'Setting', value: groupResult.visual_pattern.setting },
+                        { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment },
+                        { label: 'Color palette', value: groupResult.visual_pattern.color_palette },
+                        { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace },
+                      ].map(item => item.value ? (
+                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                          <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
+                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                        </div>
+                      ) : null)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ad structure template */}
+                {groupResult.ad_structure_template?.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Typical ad structure</p>
+                    <div className="flex flex-col gap-2">
+                      {groupResult.ad_structure_template.map((s, i) => {
+                        const colors = SECTION_COLORS[s.section] || { light: 'bg-gray-50', text: 'text-gray-700', bg: '#6b7280' };
+                        return (
+                          <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${colors.light} ${colors.text}`}>{s.section}</span>
+                            <p className="text-xs text-gray-600 leading-relaxed">{s.description}</p>
                           </div>
-                          <p className="text-sm text-gray-700 flex-1">{vp.vp}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${vp.mine_has ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                            {vp.mine_has ? 'We have it' : 'Missing'}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* 6. Visual comparison */}
-                <SectionDivider label="6 — Visual comparison" />
-                {compareResult.visual_comparison && (
+                {/* Talent pattern */}
+                {groupResult.talent_pattern && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent pattern</p>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { label: 'Appearance', value: groupResult.talent_pattern.appearance },
+                        { label: 'Clothing', value: groupResult.talent_pattern.clothing },
+                        { label: 'Setting', value: groupResult.talent_pattern.setting },
+                        { label: 'Energy', value: groupResult.talent_pattern.energy },
+                      ].map(item => item.value ? (
+                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                          <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
+                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                        </div>
+                      ) : null)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Strongest patterns */}
+                {groupResult.strongest_patterns?.length > 0 && (
                   <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                        <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-2">Our visuals</p>
-                        <p className="text-sm text-blue-900 leading-relaxed">{compareResult.visual_comparison.mine}</p>
-                      </div>
-                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-                        <p className="text-xs font-medium text-purple-600 uppercase tracking-wider mb-2">Competitor visuals</p>
-                        <p className="text-sm text-purple-900 leading-relaxed">{compareResult.visual_comparison.competitor}</p>
-                      </div>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                      <p className="text-xs font-medium text-amber-700 uppercase tracking-wider mb-1">Gap</p>
-                      <p className="text-sm text-amber-800 leading-relaxed">{compareResult.visual_comparison.gap}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 7. Talent */}
-                <SectionDivider label="7 — Talent comparison" />
-                {compareResult.talent && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                      <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-3">Our talent</p>
-                      {[
-                        { label: 'Appearance', value: compareResult.talent.mine?.appearance },
-                        { label: 'Clothing', value: compareResult.talent.mine?.clothing },
-                        { label: 'Setting', value: compareResult.talent.mine?.setting },
-                        { label: 'Energy', value: compareResult.talent.mine?.energy },
-                      ].map(item => item.value ? (
-                        <div key={item.label} className="flex gap-2 mb-2 last:mb-0">
-                          <p className="text-xs text-blue-400 w-20 flex-shrink-0 pt-0.5">{item.label}</p>
-                          <p className="text-xs text-blue-900 leading-relaxed">{item.value}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Strongest patterns</p>
+                    {groupResult.strongest_patterns.map((p, i) => (
+                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
+                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">{i + 1}</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 mb-1">{p.title}</p>
+                          <p className="text-sm text-gray-500 leading-relaxed">{p.observation}</p>
                         </div>
-                      ) : null)}
-                    </div>
-                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-                      <p className="text-xs font-medium text-purple-600 uppercase tracking-wider mb-3">Competitor talent</p>
-                      {[
-                        { label: 'Appearance', value: compareResult.talent.competitor?.appearance },
-                        { label: 'Clothing', value: compareResult.talent.competitor?.clothing },
-                        { label: 'Setting', value: compareResult.talent.competitor?.setting },
-                        { label: 'Energy', value: compareResult.talent.competitor?.energy },
-                      ].map(item => item.value ? (
-                        <div key={item.label} className="flex gap-2 mb-2 last:mb-0">
-                          <p className="text-xs text-purple-400 w-20 flex-shrink-0 pt-0.5">{item.label}</p>
-                          <p className="text-xs text-purple-900 leading-relaxed">{item.value}</p>
-                        </div>
-                      ) : null)}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
