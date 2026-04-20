@@ -76,16 +76,27 @@ async function captureFrameFromVideo(video, timestamp, w, h) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
-    video.currentTime = timestampToSeconds(timestamp);
-    video.addEventListener('seeked', function onSeeked() {
-      video.removeEventListener('seeked', onSeeked);
-      function draw() {
+
+    const timeout = setTimeout(() => resolve(null), 8000);
+
+    function doSeek() {
+      video.currentTime = timestampToSeconds(timestamp);
+      video.addEventListener('seeked', function onSeeked() {
+        video.removeEventListener('seeked', onSeeked);
+        clearTimeout(timeout);
         try { ctx.drawImage(video, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.75)); }
         catch { resolve(null); }
-      }
-      if (video.readyState >= 2) draw();
-      else video.addEventListener('canplay', draw, { once: true });
-    }, { once: true });
+      }, { once: true });
+    }
+
+    // Wait for the video to be ready to seek before seeking
+    if (video.readyState >= 1) {
+      doSeek();
+    } else {
+      video.addEventListener('loadedmetadata', doSeek, { once: true });
+      // Kick off loading if it hasn't started
+      if (video.networkState === 0) video.load();
+    }
   });
 }
 
@@ -175,7 +186,10 @@ export default function Home() {
     try { localStorage.setItem('adelf_sidebar_collapsed', String(sidebarCollapsed)); } catch {}
   }, [sidebarCollapsed]);
   useEffect(() => {
-    if (videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) captureFrames();
+    if (!videoAnalysis?.timeline?.length || Object.keys(capturedFrames).length > 0 || capturingFrames) return;
+    // Delay one tick so the hidden proxy video element has been rendered into the DOM
+    const t = setTimeout(() => captureFrames(), 100);
+    return () => clearTimeout(t);
   }, [videoAnalysis]);
   useEffect(() => {
     if (videoAnalysis?.general?.opener?.timestamp) captureOpenerFrame(videoAnalysis.general.opener.timestamp);
@@ -298,9 +312,17 @@ export default function Home() {
 
   async function captureFrames() {
     if (!captureVideoRef.current || !videoAnalysis?.timeline?.length) return;
-    setCapturingFrames(true); setCapturedFrames({});
     const video = captureVideoRef.current;
-    const nw = videoNaturalSize?.w || 9; const nh = videoNaturalSize?.h || 16;
+    // Wait for the proxy video to have loaded enough metadata to be seekable
+    if (video.readyState < 1) {
+      await new Promise(resolve => {
+        video.addEventListener('loadedmetadata', resolve, { once: true });
+        if (video.networkState === 0) video.load();
+      });
+    }
+    setCapturingFrames(true); setCapturedFrames({});
+    const nw = video.videoWidth || videoNaturalSize?.w || 9;
+    const nh = video.videoHeight || videoNaturalSize?.h || 16;
     const w = 160; const h = Math.round(w * nh / nw);
     const frames = {};
     for (const row of videoAnalysis.timeline) {
@@ -901,12 +923,13 @@ export default function Home() {
                                 <>
                                   {/* Filmstrip row */}
                                   <div style={{ position: 'relative' }}>
-                                    <div ref={filmstripRef} style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'thin' }}>
+                                    <div ref={filmstripRef} style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'thin' }}>
                                       {timeline.map((row, i) => {
                                         const frame = capturedFrames[row.timestamp];
                                         const section = getSectionForTimestamp(row.timestamp);
                                         const sectionColor = SECTION_COLORS[section]?.bg || '#9ca3af';
                                         const isHovered = hoveredFrameIdx === i;
+                                        const alreadyAdded = frame && shotList.some(s => s.thumbnail === frame);
                                         return (
                                           <div
                                             key={i}
@@ -916,35 +939,55 @@ export default function Home() {
                                             style={{ flexShrink: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 0 }}>
                                             {/* thumb */}
                                             <div style={{
-                                              width: 72, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16',
-                                              borderRadius: 6, overflow: 'hidden', background: '#1a1c2e',
+                                              width: 100, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16',
+                                              borderRadius: 8, overflow: 'hidden', background: '#1a1c2e',
                                               outline: isHovered ? `2px solid ${C.accent}` : '2px solid transparent',
                                               outlineOffset: 1,
                                               transition: 'outline-color 0.1s',
                                               position: 'relative',
                                             }}>
                                               {frame
-                                                ? <img src={frame} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: isHovered ? 1 : 0.85, transition: 'opacity 0.1s' }} />
+                                                ? <img src={frame} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: isHovered ? 1 : 0.82, transition: 'opacity 0.1s' }} />
                                                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                     {capturingFrames
                                                       ? <div style={{ width: 10, height: 10, border: `1.5px solid rgba(255,255,255,0.15)`, borderTop: `1.5px solid rgba(255,255,255,0.5)`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                                                       : <span style={{ fontFamily: C.mono, fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>{row.timestamp}</span>}
                                                   </div>}
-                                              {/* add-to-shotlist overlay on hover */}
-                                              {frame && isHovered && (
-                                                <div style={{ position: 'absolute', top: 4, right: 4 }} onClick={e => e.stopPropagation()}>
-                                                  <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
+                                              {/* + add button — always visible when frame is ready */}
+                                              {frame && (
+                                                <div
+                                                  style={{ position: 'absolute', bottom: 5, right: 5 }}
+                                                  onClick={e => { e.stopPropagation(); if (!alreadyAdded) addToShotList({ thumbnail: frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl }); }}>
+                                                  <div style={{
+                                                    width: 22, height: 22, borderRadius: '50%',
+                                                    background: alreadyAdded ? 'rgba(37,99,235,0.9)' : 'rgba(255,255,255,0.85)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 13, fontWeight: 700, lineHeight: 1,
+                                                    color: alreadyAdded ? '#fff' : C.text,
+                                                    cursor: alreadyAdded ? 'default' : 'pointer',
+                                                    transition: 'background 0.12s',
+                                                    backdropFilter: 'blur(2px)',
+                                                    boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                                                  }}>
+                                                    {alreadyAdded ? '✓' : '+'}
+                                                  </div>
                                                 </div>
                                               )}
                                             </div>
                                             {/* section color bar */}
                                             <div style={{ height: 3, background: sectionColor, borderRadius: '0 0 3px 3px', marginTop: 2 }} />
                                             {/* section label */}
-                                            <p style={{ fontSize: 9, color: sectionColor, fontWeight: 600, marginTop: 3, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 72 }}>{section || ''}</p>
+                                            <p style={{ fontSize: 9, color: sectionColor, fontWeight: 600, marginTop: 3, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>{section || ''}</p>
                                           </div>
                                         );
                                       })}
                                     </div>
+                                    {/* Scroll arrow */}
+                                    <button
+                                      onClick={() => filmstripRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}
+                                      style={{ position: 'absolute', right: -14, top: '38%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.95)', border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 13, color: C.textSub, zIndex: 2 }}>
+                                      ›
+                                    </button>
                                   </div>
 
                                   {/* Hovered line detail */}
