@@ -34,7 +34,7 @@ Return a JSON array with EXACTLY this structure. No markdown, no backticks, no e
 ]`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash-preview-04-17',
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
 
