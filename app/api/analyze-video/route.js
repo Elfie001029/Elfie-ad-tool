@@ -88,7 +88,8 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "color_contrast": "e.g. white text on dark background",
       "motion": "e.g. animates in, static, fade",
       "captions": "e.g. auto-captions in white, styled captions with highlight words"
-    }
+    },
+    "why_this_works": "One paragraph explaining exactly why this ad performs well — what makes the hook effective, the emotional arc it follows, the structural technique used, and the psychological or behavioral mechanism that drives action."
   },
   "timeline": [
     {

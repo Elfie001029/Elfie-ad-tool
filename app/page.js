@@ -14,6 +14,12 @@ const TYPE_COLORS = {
   product_broll: 'bg-amber-50 text-amber-700',
   greenscreen: 'bg-purple-50 text-purple-700',
 };
+const TYPE_COLORS_INLINE = {
+  talking_head: { bg: '#eff6ff', color: '#1d4ed8' },
+  talent_broll: { bg: '#f0fdf4', color: '#15803d' },
+  product_broll: { bg: '#fffbeb', color: '#b45309' },
+  greenscreen:   { bg: '#faf5ff', color: '#7e22ce' },
+};
 const SECTION_COLORS = {
   'Hook':                { bg: '#3b82f6', light: 'bg-blue-50',   text: 'text-blue-700' },
   'Opener':              { bg: '#f97316', light: 'bg-orange-50', text: 'text-orange-700' },
@@ -131,7 +137,6 @@ export default function Home() {
   const [library, setLibrary] = useState([]);
 
   // ── analyze single
-  const [activeTab, setActiveTab] = useState('analysis');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoContext, setVideoContext] = useState('');
   const [videoAnalysis, setVideoAnalysis] = useState(null);
@@ -159,14 +164,19 @@ export default function Home() {
   const [labeledScript, setLabeledScript] = useState(null);
   const [labelingScript, setLabelingScript] = useState(false);
 
+  // ── filmstrip
+  const [hoveredFrameIdx, setHoveredFrameIdx] = useState(null);
+  const [filmstripMode, setFilmstripMode] = useState('strip');
+  const filmstripRef = useRef(null);
+
   // ── effects
   useEffect(() => { setLibrary(getLibrary()); }, []);
   useEffect(() => {
     try { localStorage.setItem('adelf_sidebar_collapsed', String(sidebarCollapsed)); } catch {}
   }, [sidebarCollapsed]);
   useEffect(() => {
-    if (activeTab === 'framebyfrime' && videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) captureFrames();
-  }, [activeTab, videoAnalysis]);
+    if (videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) captureFrames();
+  }, [videoAnalysis]);
   useEffect(() => {
     if (videoAnalysis?.general?.opener?.timestamp) captureOpenerFrame(videoAnalysis.general.opener.timestamp);
   }, [videoAnalysis]);
@@ -183,7 +193,6 @@ export default function Home() {
     setVideoAnalysis(null); setGroupResult(null);
     setVideoError(''); setGroupError('');
     setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({});
-    setActiveTab('analysis');
   }
 
   // ── main analyze handler
@@ -196,7 +205,7 @@ export default function Home() {
       setVideoUrl(url); setVideoContext(context);
       setAnalysisType('single'); setMode('analysis');
       setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
-      setAnalyzingVideo(true); setVideoAnalysis(null); setActiveTab('analysis');
+      setAnalyzingVideo(true); setVideoAnalysis(null);
       try {
         const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: context }) });
         const data = await res.json();
@@ -311,7 +320,7 @@ export default function Home() {
       setVideoUrl(entry.urls?.[0] || entry.url || '');
       setVideoContext(''); setVideoAnalysis(entry.analysis);
       setCapturedFrames({}); setOpenerFrame(null);
-      setActiveTab('analysis'); setAnalysisType('single'); setMode('analysis');
+      setAnalysisType('single'); setMode('analysis');
     }
   }
   function deleteEntry(id) { const u = getLibrary().filter(e => e.id !== id); persistLibrary(u); setLibrary(u); }
@@ -797,206 +806,274 @@ export default function Home() {
 
                 {/* ── Single analysis */}
                 {analysisType === 'single' && (
-                  <div className="flex flex-col gap-4">
+                  <>
                     {analyzingVideo && (
-                      <div className="flex items-center justify-center py-32">
-                        <div className="text-center">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+                        <div style={{ textAlign: 'center' }}>
                           <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
                           <p style={{ fontSize: 14, color: C.muted }}>Analyzing video… this takes 1–2 minutes</p>
                         </div>
                       </div>
                     )}
-                    {videoError && <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">{videoError}</div>}
-                    {videoAnalysis && (
-                      <>
-                        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-                          <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Analysis</button>
-                          <button onClick={() => setActiveTab('framebyfrime')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'framebyfrime' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Frame by frame</button>
-                        </div>
+                    {videoError && <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 13, borderRadius: 12, padding: '12px 16px' }}>{videoError}</div>}
+                    {videoAnalysis && (() => {
+                      // ── helpers scoped to render
+                      const timeline = videoAnalysis.timeline || [];
+                      const adStructure = videoAnalysis.general?.ad_structure || [];
+                      const fullTranscript = (videoAnalysis.copy_only || []).filter(c => c.text).map(c => c.text).join(' ');
 
-                        <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
-                          <div className="flex flex-col gap-4">
-                            {activeTab === 'analysis' && (
-                              <>
-                                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
-                                  <div className="flex gap-4 mb-4">
+                      // Map each timeline entry to its ad-structure section label
+                      function getSectionForTimestamp(ts) {
+                        const sec = timestampToSeconds(ts);
+                        for (let i = adStructure.length - 1; i >= 0; i--) {
+                          if (sec >= timestampToSeconds(adStructure[i].start)) return adStructure[i].section;
+                        }
+                        return null;
+                      }
+
+                      const hoveredRow = hoveredFrameIdx !== null ? timeline[hoveredFrameIdx] : null;
+
+                      return (
+                        <div style={{ display: 'flex', height: '100%', gap: 0 }}>
+
+                          {/* ── LEFT: sticky video panel */}
+                          <div style={{ width: 260, minWidth: 260, flexShrink: 0, position: 'sticky', top: 0, alignSelf: 'flex-start', paddingRight: 20 }}>
+                            <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                              <video ref={videoRef} src={videoUrl} controls style={{ width: '100%', display: 'block' }} />
+                              <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
+                                onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
+                            </div>
+                            {/* stats */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                              {[
+                                { label: 'Total time', value: videoAnalysis.general?.duration ?? '—' },
+                                { label: 'Total cuts', value: timeline.length || '—' },
+                              ].map(s => (
+                                <div key={s.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                                  <p style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{s.label}</p>
+                                  <p style={{ fontSize: 16, fontWeight: 600, color: C.text }}>{s.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* ── RIGHT: scrollable content */}
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+                            {/* Hook + Opener */}
+                            <div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                {/* Hook */}
+                                <div>
+                                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Hook</p>
+                                  <p style={{ fontSize: 20, fontWeight: 500, color: C.text, lineHeight: 1.35 }}>"{videoAnalysis.general?.hook?.copy}"</p>
+                                </div>
+                                {/* Opener */}
+                                <div>
+                                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opener</p>
+                                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                                    <p style={{ fontSize: 14, color: C.textSub, lineHeight: 1.55, flex: 1 }}>{videoAnalysis.general?.hook?.visual}</p>
                                     {openerFrame && (
-                                      <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 72, height: 128 }} onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
-                                        <img src={openerFrame} alt="Opener frame" className="w-full h-full object-cover" />
+                                      <div style={{ width: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', cursor: 'pointer' }} onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
+                                        <img src={openerFrame} alt="Opener" style={{ width: '100%', display: 'block' }} />
                                       </div>
                                     )}
-                                    <p className="text-2xl font-medium text-gray-900 leading-snug">"{videoAnalysis.general?.hook?.copy}"</p>
-                                  </div>
-                                  <div className="border-t border-gray-100 pt-4">
-                                    <p className="text-xs text-gray-400 mb-1">Visual opener</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed mb-3">{videoAnalysis.general?.hook?.visual}</p>
-                                    <button onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')} className="text-xs text-blue-500 hover:text-blue-700 font-mono hover:underline">▶ {videoAnalysis.general?.opener?.timestamp || '00:00:00'} — Jump to opener</button>
                                   </div>
                                 </div>
+                              </div>
+                            </div>
 
-                                <AdStructureBar data={videoAnalysis.general?.ad_structure} duration={videoAnalysis.general?.duration} brandReveal={videoAnalysis.general?.brand_reveal?.timestamp} productReveal={videoAnalysis.general?.product_reveal?.timestamp} />
+                            {/* Filmstrip */}
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                  Frame by frame analysis
+                                  {capturingFrames && <span style={{ marginLeft: 8, color: C.accent, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>capturing {Object.keys(capturedFrames).length}/{timeline.length}…</span>}
+                                </p>
+                                <button
+                                  onClick={() => setFilmstripMode(m => m === 'strip' ? 'list' : 'strip')}
+                                  style={{ fontSize: 11, fontWeight: 500, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  {filmstripMode === 'strip' ? 'list view' : 'strip view'}
+                                </button>
+                              </div>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                  {[
-                                    { label: 'Total time', value: videoAnalysis.general?.duration ?? '—' },
-                                    { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
-                                    { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.brand_reveal?.timestamp },
-                                    { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.product_reveal?.timestamp },
-                                  ].map(stat => (
-                                    <div key={stat.label} onClick={() => stat.ts && jumpToTimestamp(stat.ts)} className={`bg-white border border-gray-200 rounded-xl p-4 text-center ${stat.ts ? 'cursor-pointer hover:border-blue-300 transition-colors' : ''}`}>
-                                      <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
-                                      <p className={`text-lg font-medium ${stat.ts ? 'text-blue-600' : 'text-gray-900'}`}>{stat.value}</p>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                {videoAnalysis.general?.value_propositions?.length > 0 && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Value propositions</p>
-                                    <div className="flex flex-col gap-2">
-                                      {videoAnalysis.general.value_propositions.map((vp, i) => (
-                                        <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                                          <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                                          <div className="flex flex-col gap-1">
-                                            <p className="text-sm font-medium text-gray-800 leading-snug">{vp.summary ?? vp}</p>
-                                            {vp.copy && <p className="text-xs text-gray-500 leading-relaxed italic">"{vp.copy}"</p>}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {videoAnalysis.general?.talent && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
-                                    <div className="flex flex-col gap-2">
-                                      {[{ label: 'Appearance', value: videoAnalysis.general.talent.appearance }, { label: 'Clothing', value: videoAnalysis.general.talent.clothing }, { label: 'Setting', value: videoAnalysis.general.talent.setting }, { label: 'Energy', value: videoAnalysis.general.talent.energy }].map(item => item.value ? (
-                                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                                          <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
-                                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-                                        </div>
-                                      ) : null)}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {videoAnalysis.general?.cta && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
-                                    <div className="flex items-center gap-3">
-                                      <button onClick={() => jumpToTimestamp(videoAnalysis.general.cta.timestamp)} className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors flex-shrink-0">{videoAnalysis.general.cta.timestamp}</button>
-                                      <p className="text-sm font-medium text-gray-900">"{videoAnalysis.general.cta.text}"</p>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {videoAnalysis.broll_logic && (
-                                  <button onClick={() => setEditorBriefOpen(true)} style={{ width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
-                                    onMouseLeave={e => e.currentTarget.style.background = C.accent}>
-                                    Apply this editing logic to a script →
-                                  </button>
-                                )}
-                              </>
-                            )}
-
-                            {activeTab === 'framebyfrime' && (
-                              <>
-                                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                                  <div className="px-5 py-4 border-b border-gray-100">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                      {capturingFrames ? `Capturing ${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length}…` : Object.keys(capturedFrames).length > 0 ? `${Object.keys(capturedFrames).length} frames captured` : 'Click any frame to jump to that moment'}
-                                    </p>
-                                  </div>
-                                  <div className="divide-y divide-gray-50">
-                                    {videoAnalysis.timeline?.map((row, i) => {
-                                      const frame = capturedFrames[row.timestamp];
-                                      return (
-                                        <div key={i} className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors" onClick={() => jumpToTimestamp(row.timestamp)}>
-                                          <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: 60, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
-                                            {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center">{capturingFrames ? <span className="text-xs text-gray-300">…</span> : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}</div>}
-                                          </div>
-                                          <div className="flex-1 min-w-0 py-0.5">
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                              <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
-                                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>{TYPE_LABELS[row.type] || row.type}</span>
-                                            </div>
-                                            <p className="text-xs text-gray-700 leading-relaxed mb-1">{row.visual}</p>
-                                            {row.copy && <p className="text-xs text-gray-400 italic leading-relaxed">"{row.copy}"</p>}
-                                          </div>
-                                          {frame && (
-                                            <div className="flex-shrink-0 self-center" onClick={e => e.stopPropagation()}>
-                                              <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-
-                                {videoAnalysis.copy_only?.length > 0 && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Copy only</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{videoAnalysis.copy_only.filter(c => c.text).map(c => c.text).join(' ')}</p>
-                                  </div>
-                                )}
-
-                                {videoAnalysis.transferrable_copy?.length > 0 && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
-                                      <button onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(i => i.template).join('\n'))} className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50 transition-colors">Copy all</button>
-                                    </div>
-                                    <p className="text-sm text-gray-800 leading-relaxed">{videoAnalysis.transferrable_copy.map(i => i.template).join(' ')}</p>
-                                  </div>
-                                )}
-
-                                {videoAnalysis.broll_shots?.length > 0 && (
-                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
-                                    <div className="flex flex-col">
-                                      {videoAnalysis.broll_shots.map((shot, i) => {
-                                        const ts = shot.timestamp || null;
-                                        const desc = shot.description ?? shot;
-                                        const frame = ts ? capturedFrames[ts] : null;
+                              {filmstripMode === 'strip' ? (
+                                <>
+                                  {/* Filmstrip row */}
+                                  <div style={{ position: 'relative' }}>
+                                    <div ref={filmstripRef} style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'thin' }}>
+                                      {timeline.map((row, i) => {
+                                        const frame = capturedFrames[row.timestamp];
+                                        const section = getSectionForTimestamp(row.timestamp);
+                                        const sectionColor = SECTION_COLORS[section]?.bg || '#9ca3af';
+                                        const isHovered = hoveredFrameIdx === i;
                                         return (
-                                          <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 -mx-5 px-5 hover:bg-gray-50/50 transition-colors">
-                                            <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 48, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }} onClick={() => ts && jumpToTimestamp(ts)}>
-                                              {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-gray-300 text-xs font-mono">{ts || '—'}</span></div>}
+                                          <div
+                                            key={i}
+                                            onMouseEnter={() => setHoveredFrameIdx(i)}
+                                            onMouseLeave={() => setHoveredFrameIdx(null)}
+                                            onClick={() => jumpToTimestamp(row.timestamp)}
+                                            style={{ flexShrink: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                            {/* thumb */}
+                                            <div style={{
+                                              width: 72, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16',
+                                              borderRadius: 6, overflow: 'hidden', background: '#1a1c2e',
+                                              outline: isHovered ? `2px solid ${C.accent}` : '2px solid transparent',
+                                              outlineOffset: 1,
+                                              transition: 'outline-color 0.1s',
+                                              position: 'relative',
+                                            }}>
+                                              {frame
+                                                ? <img src={frame} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: isHovered ? 1 : 0.85, transition: 'opacity 0.1s' }} />
+                                                : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {capturingFrames
+                                                      ? <div style={{ width: 10, height: 10, border: `1.5px solid rgba(255,255,255,0.15)`, borderTop: `1.5px solid rgba(255,255,255,0.5)`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                                      : <span style={{ fontFamily: C.mono, fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>{row.timestamp}</span>}
+                                                  </div>}
+                                              {/* add-to-shotlist overlay on hover */}
+                                              {frame && isHovered && (
+                                                <div style={{ position: 'absolute', top: 4, right: 4 }} onClick={e => e.stopPropagation()}>
+                                                  <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
+                                                </div>
+                                              )}
                                             </div>
-                                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => ts && jumpToTimestamp(ts)}>
-                                              {ts && <span className="text-xs font-mono text-blue-500 block mb-0.5">{ts}</span>}
-                                              <p className="text-sm text-gray-700 leading-relaxed">{desc}</p>
-                                            </div>
-                                            {frame && <AddToShotListBtn thumbnail={frame} annotation={desc} shootDirection={desc} source={`${urlFilename} · ${ts}`} videoUrl={videoUrl} />}
+                                            {/* section color bar */}
+                                            <div style={{ height: 3, background: sectionColor, borderRadius: '0 0 3px 3px', marginTop: 2 }} />
+                                            {/* section label */}
+                                            <p style={{ fontSize: 9, color: sectionColor, fontWeight: 600, marginTop: 3, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 72 }}>{section || ''}</p>
                                           </div>
                                         );
                                       })}
                                     </div>
                                   </div>
-                                )}
-                              </>
-                            )}
-                          </div>
 
-                          <div style={{ position: 'sticky', top: 16 }}>
-                            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                              <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: 360 }} />
-                              <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
-                                onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
-                              <div className="px-4 py-3 border-t border-gray-100">
-                                <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
-                              </div>
+                                  {/* Hovered line detail */}
+                                  <div style={{
+                                    marginTop: 12, minHeight: 64, background: C.surface, borderRadius: 10, padding: '12px 16px',
+                                    border: `1px solid ${hoveredRow ? C.accentBorder : C.border}`,
+                                    transition: 'border-color 0.15s',
+                                    display: 'flex', flexDirection: 'column', gap: 6,
+                                  }}>
+                                    {hoveredRow ? (
+                                      <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent }}>{hoveredRow.timestamp}</span>
+                                          {(() => {
+                                            const section = getSectionForTimestamp(hoveredRow.timestamp);
+                                            const sc = SECTION_COLORS[section];
+                                            const tc = TYPE_COLORS_INLINE[hoveredRow.type] || { bg: '#f3f4f6', color: '#6b7280' };
+                                            return (
+                                              <>
+                                                {section && sc && <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: sc.light === 'bg-gray-50' ? '#f9fafb' : undefined, color: sc.bg }}>{section}</span>}
+                                                <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: tc.bg, color: tc.color }}>{TYPE_LABELS[hoveredRow.type] || hoveredRow.type}</span>
+                                              </>
+                                            );
+                                          })()}
+                                        </div>
+                                        <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{hoveredRow.visual}</p>
+                                        {hoveredRow.copy && <p style={{ fontSize: 13, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredRow.copy}"</p>}
+                                      </>
+                                    ) : (
+                                      <p style={{ fontSize: 12, color: C.mutedLight, lineHeight: 1.5 }}>Hover over a frame to see the transcript, scene description, and footage type.</p>
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                /* List view */
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {timeline.map((row, i) => {
+                                    const frame = capturedFrames[row.timestamp];
+                                    const section = getSectionForTimestamp(row.timestamp);
+                                    const sc = SECTION_COLORS[section];
+                                    const tc = TYPE_COLORS_INLINE[row.type] || { bg: '#f3f4f6', color: '#6b7280' };
+                                    return (
+                                      <div key={i}
+                                        onClick={() => jumpToTimestamp(row.timestamp)}
+                                        style={{ display: 'flex', gap: 14, padding: '12px 16px', borderBottom: i < timeline.length - 1 ? `1px solid ${C.border}` : 'none', cursor: 'pointer', transition: 'background 0.1s' }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = C.surfaceHover; setHoveredFrameIdx(i); }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = '#fff'; setHoveredFrameIdx(null); }}>
+                                        {/* thumb */}
+                                        <div style={{ width: 48, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: '#1a1c2e', aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
+                                          {frame
+                                            ? <img src={frame} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: C.mono, fontSize: 8, color: 'rgba(255,255,255,0.25)' }}>{row.timestamp}</span></div>}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent, flexShrink: 0 }}>{row.timestamp}</span>
+                                            {section && sc && <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: sc.light === 'bg-gray-50' ? '#f9fafb' : undefined, color: sc.bg, flexShrink: 0 }}>{section}</span>}
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: tc.bg, color: tc.color, flexShrink: 0 }}>{TYPE_LABELS[row.type] || row.type}</span>
+                                          </div>
+                                          <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5, marginBottom: row.copy ? 3 : 0 }}>{row.visual}</p>
+                                          {row.copy && <p style={{ fontSize: 12, color: C.text, fontStyle: 'italic', lineHeight: 1.5 }}>"{row.copy}"</p>}
+                                        </div>
+                                        {frame && (
+                                          <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={e => e.stopPropagation()}>
+                                            <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
+
+                            {/* Ad structure bar */}
+                            <AdStructureBar data={adStructure} duration={videoAnalysis.general?.duration} brandReveal={videoAnalysis.general?.brand_reveal?.timestamp} productReveal={videoAnalysis.general?.product_reveal?.timestamp} />
+
+                            {/* Full script */}
+                            {fullTranscript && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Full script</p>
+                                <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.8 }}>{fullTranscript}</p>
+                              </div>
+                            )}
+
+                            {/* Value propositions */}
+                            {videoAnalysis.general?.value_propositions?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Value proposition</p>
+                                <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {videoAnalysis.general.value_propositions.map((vp, i) => (
+                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: i < videoAnalysis.general.value_propositions.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                      <div style={{ padding: '12px 16px', borderRight: `1px solid ${C.border}`, background: '#fff' }}>
+                                        <p style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{vp.summary ?? vp}</p>
+                                      </div>
+                                      <div style={{ padding: '12px 16px', background: C.surface }}>
+                                        <p style={{ fontSize: 13, color: C.textSub, fontStyle: vp.copy ? 'italic' : 'normal' }}>{vp.copy || '—'}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Why this works */}
+                            {videoAnalysis.general?.why_this_works && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Why this works</p>
+                                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px' }}>
+                                  <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.8 }}>{videoAnalysis.general.why_this_works}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editor brief CTA */}
+                            {videoAnalysis.broll_logic && (
+                              <button onClick={() => setEditorBriefOpen(true)}
+                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.12s', fontFamily: 'inherit' }}
+                                onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
+                                onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+                                Apply this editing logic to a script →
+                              </button>
+                            )}
+
+                          </div>{/* /right col */}
                         </div>
-                      </>
-                    )}
-                  </div>
+                      );
+                    })()}
+                  </>
                 )}
 
                 {/* ── Group analysis */}
