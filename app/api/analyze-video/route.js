@@ -116,7 +116,17 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "timestamp": "00:00:00",
       "description": "Short production direction e.g. Woman holding product in good lighting against clean background"
     }
-  ]
+  ],
+  "broll_logic": {
+    "summary": "One paragraph describing the overall pattern: what script content triggers each type of footage and why — e.g. 'This brand stays on talking head during personal story and emotional claims, then cuts to product B-roll the moment a specific ingredient or benefit is named, reinforcing the claim visually exactly when the viewer needs proof.'",
+    "rules": [
+      {
+        "trigger": "What in the script triggers this footage type — e.g. 'Talent mentions a specific ingredient, product name, or quantified benefit'",
+        "footage_type": "talking_head | talent_broll | product_broll | greenscreen",
+        "reason": "Why this pairing works strategically — e.g. 'Visual proof lands exactly when the credibility claim is spoken'"
+      }
+    ]
+  }
 }
 
 IMPORTANT for copy_only and transferrable_copy: cover the ENTIRE script from start to finish. Do not skip or summarise — every spoken line or on-screen text line must appear. transferrable_copy must be derived directly from copy_only and cover every line in order.`

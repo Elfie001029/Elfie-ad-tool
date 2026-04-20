@@ -81,7 +81,17 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "visual": "Exact description of what is on screen at this moment",
       "shoot_direction": "Production direction for recreating this shot e.g. Position camera at waist height, talent in fitted white dress against neutral wall, natural window light from the left"
     }
-  ]
+  ],
+  "broll_logic": {
+    "summary": "One paragraph describing the consistent B-roll pairing logic across all videos — what script content triggers each footage type and why this brand uses that pattern strategically",
+    "rules": [
+      {
+        "trigger": "What in the script consistently triggers this footage type across these ads — e.g. 'Any mention of a specific ingredient, stat, or product name'",
+        "footage_type": "talking_head | talent_broll | product_broll | greenscreen",
+        "reason": "Why this pairing is strategically effective for this brand's audience"
+      }
+    ]
+  }
 }
 
 IMPORTANT for key_frames: select exactly 4-5 frames per video that are the most visually distinct and strategically important moments — the hook frame, a strong product shot, a key emotion or reaction, a text overlay moment, and the CTA or closing frame. Each must have a specific actionable shoot_direction a content producer can follow on set.`

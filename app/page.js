@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 
+// ── Type constants
 const TYPE_LABELS = {
   talking_head: 'Talking head',
   talent_broll: 'Talent B-roll',
@@ -26,6 +27,24 @@ const SECTION_COLORS = {
   'CTA':                 { bg: '#6b7280', light: 'bg-gray-50',   text: 'text-gray-700' },
 };
 
+// ── Design tokens
+const C = {
+  bg: '#ffffff',
+  surface: '#f7f8ff',
+  surfaceHover: '#f0f2fe',
+  border: '#e4e6f0',
+  borderStrong: '#d0d4e8',
+  text: '#0d0f1a',
+  textSub: '#3d4158',
+  muted: '#8b90a7',
+  mutedLight: '#c4c7d8',
+  accent: '#2563eb',
+  accentLight: '#eff6ff',
+  accentBorder: '#bfdbfe',
+  mono: "'IBM Plex Mono', monospace",
+};
+
+// ── Utilities
 function timestampToSeconds(ts) {
   if (!ts) return 0;
   const parts = ts.split(':').map(Number);
@@ -64,11 +83,45 @@ async function captureFrameFromVideo(video, timestamp, w, h) {
   });
 }
 
-export default function Home() {
-  // ── nav
-  const [mode, setMode] = useState('library');
+async function createGroupThumbnail(frames) {
+  const valid = frames.filter(Boolean).slice(0, 4);
+  if (!valid.length) return null;
+  const cols = 2;
+  const cellW = 80;
+  const cellH = Math.round(cellW * 16 / 9);
+  const rows = Math.ceil(valid.length / cols);
+  const canvas = document.createElement('canvas');
+  canvas.width = cellW * Math.min(valid.length, cols);
+  canvas.height = cellH * rows;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0d0f1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await Promise.all(valid.map((src, i) => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, (i % cols) * cellW, Math.floor(i / cols) * cellH, cellW, cellH);
+      resolve();
+    };
+    img.onerror = resolve;
+    img.src = src;
+  })));
+  return canvas.toDataURL('image/jpeg', 0.65);
+}
 
-  // ── shot list (global cart)
+export default function Home() {
+  // ── layout state
+  const [mode, setMode] = useState('home'); // 'home' | 'analysis'
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('adelf_sidebar_collapsed') === 'true'; } catch { return false; }
+  });
+
+  // ── home form
+  const [urls, setUrls] = useState(['']);
+  const [context, setContext] = useState('');
+  const [analysisType, setAnalysisType] = useState('single'); // 'single' | 'group'
+  const freshGroupAnalysis = useRef(false);
+
+  // ── shot list
   const [shotList, setShotList] = useState([]);
   const [shotListOpen, setShotListOpen] = useState(false);
   const [briefNotes, setBriefNotes] = useState('');
@@ -76,11 +129,8 @@ export default function Home() {
 
   // ── library
   const [library, setLibrary] = useState([]);
-  const [newAdBrand, setNewAdBrand] = useState('');
-  const [newAdType, setNewAdType] = useState('own');
-  const [showSavePrompt, setShowSavePrompt] = useState(false);
 
-  // ── analyze (single)
+  // ── analyze single
   const [activeTab, setActiveTab] = useState('analysis');
   const [videoUrl, setVideoUrl] = useState('');
   const [videoContext, setVideoContext] = useState('');
@@ -100,75 +150,135 @@ export default function Home() {
   const [groupResult, setGroupResult] = useState(null);
   const [groupRunning, setGroupRunning] = useState(false);
   const [groupError, setGroupError] = useState('');
-  const [groupKeyFrames, setGroupKeyFrames] = useState({}); // key: `${videoIndex}:${timestamp}` → dataURL
+  const [groupKeyFrames, setGroupKeyFrames] = useState({});
   const groupVideoRefs = useRef([]);
 
-  // ── boot
-  useEffect(() => { setLibrary(getLibrary()); }, []);
+  // ── editor brief
+  const [editorBriefOpen, setEditorBriefOpen] = useState(false);
+  const [editorScript, setEditorScript] = useState('');
+  const [labeledScript, setLabeledScript] = useState(null);
+  const [labelingScript, setLabelingScript] = useState(false);
 
-  // ── frame capture effects (single)
+  // ── effects
+  useEffect(() => { setLibrary(getLibrary()); }, []);
+  useEffect(() => {
+    try { localStorage.setItem('adelf_sidebar_collapsed', String(sidebarCollapsed)); } catch {}
+  }, [sidebarCollapsed]);
   useEffect(() => {
     if (activeTab === 'framebyfrime' && videoAnalysis?.timeline?.length && Object.keys(capturedFrames).length === 0 && !capturingFrames) captureFrames();
   }, [activeTab, videoAnalysis]);
-
   useEffect(() => {
     if (videoAnalysis?.general?.opener?.timestamp) captureOpenerFrame(videoAnalysis.general.opener.timestamp);
   }, [videoAnalysis]);
-
-  // ── capture group key frames when result arrives
   useEffect(() => {
     if (!groupResult?.key_frames?.length) return;
     const filledUrls = groupUrls.filter(u => u.trim());
-    captureGroupKeyFrames(groupResult.key_frames, filledUrls);
+    captureGroupKeyFrames(groupResult.key_frames, filledUrls, groupResult);
   }, [groupResult]);
 
-  // ── analyze single
-  async function analyzeVideo() {
-    if (!videoUrl) return setVideoError('Please paste a video URL first.');
-    setVideoError(''); setCapturedFrames({}); setOpenerFrame({}); setShowSavePrompt(false);
-    setAnalyzingVideo(true); setVideoAnalysis(null); setActiveTab('analysis');
-    try {
-      const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl, adContext: videoContext }) });
-      const data = await res.json();
-      if (data.error) return setVideoError(data.error);
-      setVideoAnalysis(data.analysis);
-      setShowSavePrompt(true);
-    } catch { setVideoError('Something went wrong. Please try again.'); }
-    finally { setAnalyzingVideo(false); }
+  // ── navigation
+  function goHome() {
+    setMode('home');
+    setUrls(['']); setContext('');
+    setVideoAnalysis(null); setGroupResult(null);
+    setVideoError(''); setGroupError('');
+    setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({});
+    setActiveTab('analysis');
   }
 
-  // ── group analysis
-  async function runGroupAnalysis() {
-    const filled = groupUrls.filter(u => u.trim());
-    if (filled.length < 2) return setGroupError('Add at least 2 video URLs.');
-    setGroupError(''); setGroupRunning(true); setGroupResult(null); setGroupKeyFrames({});
-    try {
-      const res = await fetch('/api/group-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrls: filled, context: groupContext }) });
-      const data = await res.json();
-      if (data.error) return setGroupError(data.error);
-      setGroupResult(data.result);
-    } catch { setGroupError('Something went wrong. Please try again.'); }
-    finally { setGroupRunning(false); }
+  // ── main analyze handler
+  async function handleAnalyze() {
+    const filled = urls.filter(u => u.trim());
+    if (!filled.length) return;
+
+    if (filled.length === 1) {
+      const url = filled[0];
+      setVideoUrl(url); setVideoContext(context);
+      setAnalysisType('single'); setMode('analysis');
+      setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
+      setAnalyzingVideo(true); setVideoAnalysis(null); setActiveTab('analysis');
+      try {
+        const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: context }) });
+        const data = await res.json();
+        if (data.error) return setVideoError(data.error);
+        setVideoAnalysis(data.analysis);
+        autoSaveSingle(url, data.analysis);
+      } catch { setVideoError('Something went wrong. Please try again.'); }
+      finally { setAnalyzingVideo(false); }
+    } else {
+      setGroupUrls(filled); setGroupContext(context);
+      setAnalysisType('group'); setMode('analysis');
+      freshGroupAnalysis.current = true;
+      setGroupError(''); setGroupRunning(true); setGroupResult(null); setGroupKeyFrames({});
+      try {
+        const res = await fetch('/api/group-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrls: filled, context }) });
+        const data = await res.json();
+        if (data.error) return setGroupError(data.error);
+        setGroupResult(data.result);
+      } catch { setGroupError('Something went wrong. Please try again.'); }
+      finally { setGroupRunning(false); }
+    }
   }
 
-  // ── capture group key frames
-  async function captureGroupKeyFrames(keyFrames, urls) {
+  // ── auto-save
+  async function autoSaveSingle(url, analysis) {
+    const video = captureVideoRef.current;
+    let thumbnail = null;
+    if (video) {
+      try {
+        const nw = videoNaturalSize?.w || 9; const nh = videoNaturalSize?.h || 16;
+        thumbnail = await captureFrameFromVideo(video, '00:00:00', 200, Math.round(200 * nh / nw));
+      } catch {}
+    }
+    const entry = {
+      id: Date.now().toString(), type: 'single',
+      urls: [url], analysis, groupResult: null,
+      savedAt: new Date().toISOString(), thumbnail,
+      hook: analysis?.general?.hook?.copy || '',
+    };
+    const updated = [entry, ...getLibrary()];
+    persistLibrary(updated); setLibrary(updated);
+  }
+
+  async function autoSaveGroup(urls, result, thumbnail) {
+    const hook = result?.common_hooks?.[0]?.copy || result?.strongest_patterns?.[0]?.title || `${urls.length} ads`;
+    const entry = {
+      id: Date.now().toString(), type: 'group',
+      urls, analysis: null, groupResult: result,
+      savedAt: new Date().toISOString(), thumbnail,
+      hook,
+    };
+    const updated = [entry, ...getLibrary()];
+    persistLibrary(updated); setLibrary(updated);
+  }
+
+  // ── frame capture
+  async function captureGroupKeyFrames(keyFrames, urls, result) {
     const frames = {};
     for (const kf of keyFrames) {
       const url = urls[kf.video_index];
       if (!url) continue;
       const video = groupVideoRefs.current[kf.video_index];
       if (!video) continue;
-      const nw = video.videoWidth || 9;
-      const nh = video.videoHeight || 16;
+      const nw = video.videoWidth || 9; const nh = video.videoHeight || 16;
       const w = 160; const h = Math.round(w * nh / nw);
       const dataUrl = await captureFrameFromVideo(video, kf.timestamp, w, h);
       frames[`${kf.video_index}:${kf.timestamp}`] = dataUrl;
       setGroupKeyFrames({ ...frames });
     }
+    if (freshGroupAnalysis.current) {
+      freshGroupAnalysis.current = false;
+      const byVideo = {};
+      for (const kf of keyFrames) {
+        if (!byVideo[kf.video_index] && frames[`${kf.video_index}:${kf.timestamp}`]) {
+          byVideo[kf.video_index] = frames[`${kf.video_index}:${kf.timestamp}`];
+        }
+      }
+      const thumbnail = await createGroupThumbnail(Object.values(byVideo));
+      await autoSaveGroup(urls, result, thumbnail);
+    }
   }
 
-  // ── single frame capture helpers
   async function captureOpenerFrame(timestamp) {
     const video = captureVideoRef.current;
     if (!video) return;
@@ -191,16 +301,34 @@ export default function Home() {
     setCapturingFrames(false);
   }
 
+  // ── library
+  function openFromLibrary(entry) {
+    if (entry.type === 'group') {
+      setGroupUrls(entry.urls || []); setGroupContext('');
+      setGroupResult(entry.groupResult); setGroupKeyFrames({});
+      setAnalysisType('group'); setMode('analysis');
+    } else {
+      setVideoUrl(entry.urls?.[0] || entry.url || '');
+      setVideoContext(''); setVideoAnalysis(entry.analysis);
+      setCapturedFrames({}); setOpenerFrame(null);
+      setActiveTab('analysis'); setAnalysisType('single'); setMode('analysis');
+    }
+  }
+  function deleteEntry(id) { const u = getLibrary().filter(e => e.id !== id); persistLibrary(u); setLibrary(u); }
+  function jumpToTimestamp(ts) { if (videoRef.current) { videoRef.current.currentTime = timestampToSeconds(ts); videoRef.current.play(); } }
+
   // ── shot list helpers
-  function addToShotList({ thumbnail, annotation, shootDirection, source }) {
+  function addToShotList({ thumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }) {
     if (!thumbnail) return;
-    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '' }]);
+    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '', videoUrl: itemVideoUrl || '' }]);
     setShotListOpen(true);
   }
   function removeFromShotList(id) { setShotList(prev => prev.filter(i => i.id !== id)); }
   function updateShotListItem(id, field, value) {
     setShotList(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
   }
+
+  // ── PDF download
   async function downloadPDF() {
     setPdfDownloading(true);
     try {
@@ -208,134 +336,91 @@ export default function Home() {
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
-      const margin = 48;
+      const margin = 40; const gap = 16;
       const contentW = pageW - margin * 2;
+      const colW = (contentW - gap) / 2;
+      const thumbW = 120; const thumbH = Math.round(thumbW * 16 / 9);
+      const thumbX = (colW - thumbW) / 2;
+      const textAreaW = colW - 8;
+      const TEXT_RESERVE = 90;
+      const cardH = thumbH + TEXT_RESERVE;
       let y = margin;
 
-      // Title + date
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(20);
-      doc.setTextColor(20, 20, 20);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20, 20, 20);
       doc.text('Shot List', margin, y);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(160, 160, 160);
-      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      doc.text(dateStr, pageW - margin, y, { align: 'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(160, 160, 160);
+      doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageW - margin, y, { align: 'right' });
       y += 28;
 
-      // Notes block
       if (briefNotes.trim()) {
-        doc.setFontSize(10);
-        doc.setTextColor(80, 80, 80);
+        doc.setFontSize(10); doc.setTextColor(80, 80, 80);
         const noteLines = doc.splitTextToSize(briefNotes.trim(), contentW - 24);
         const noteBlockH = noteLines.length * 14 + 20;
-        doc.setFillColor(248, 248, 248);
-        doc.setDrawColor(220, 220, 220);
-        doc.setLineWidth(0.5);
+        doc.setFillColor(248, 248, 248); doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.5);
         doc.roundedRect(margin, y, contentW, noteBlockH, 4, 4, 'FD');
         doc.text(noteLines, margin + 12, y + 14);
         y += noteBlockH + 16;
       }
 
-      // Divider
-      doc.setDrawColor(220, 220, 220);
-      doc.setLineWidth(0.5);
-      doc.line(margin, y, pageW - margin, y);
-      y += 24;
-
-      // Shots
-      const thumbW = 56;
-      const thumbH = Math.round(thumbW * 16 / 9);
-      const textX = margin + thumbW + 16;
-      const textW = contentW - thumbW - 16;
+      doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.5);
+      doc.line(margin, y, pageW - margin, y); y += 20;
 
       for (let i = 0; i < shotList.length; i++) {
         const item = shotList[i];
-        doc.setFontSize(10);
-        const annotationLines = doc.splitTextToSize(item.annotation || '', textW);
-        doc.setFontSize(9);
-        const shootLines = item.shootDirection ? doc.splitTextToSize('\u2192 Shoot: ' + item.shootDirection, textW) : [];
-        const textBlockH = 16 + annotationLines.length * 13 + (shootLines.length ? 8 + shootLines.length * 12 : 0);
-        const rowH = Math.max(thumbH + 24, textBlockH + 16);
-
-        if (y + rowH > pageH - margin) { doc.addPage(); y = margin; }
-
-        // number badge
-        doc.setFillColor(20, 20, 20);
-        doc.circle(margin + thumbW / 2, y + 8, 7, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), margin + thumbW / 2, y + 11, { align: 'center' });
-
-        // thumbnail
-        if (item.thumbnail) {
-          try { doc.addImage(item.thumbnail, 'JPEG', margin, y + 18, thumbW, thumbH); } catch {}
+        const col = i % 2;
+        const cardX = margin + col * (colW + gap);
+        if (col === 0 && i > 0) y += cardH + 20;
+        if (col === 0 && y + cardH > pageH - margin) { doc.addPage(); y = margin; }
+        const imgX = cardX + thumbX;
+        if (item.thumbnail) { try { doc.addImage(item.thumbnail, 'JPEG', imgX, y, thumbW, thumbH); } catch {} }
+        else { doc.setFillColor(240, 240, 240); doc.roundedRect(imgX, y, thumbW, thumbH, 3, 3, 'F'); }
+        doc.setFillColor(20, 20, 20); doc.roundedRect(imgX + 5, y + 5, 18, 14, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+        doc.text(String(i + 1), imgX + 14, y + 14, { align: 'center' });
+        let textY = y + thumbH + 10;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(160, 160, 160);
+        doc.text(item.source || '', cardX + 4, textY); textY += 13;
+        if (item.annotation) {
+          doc.setFontSize(9); doc.setTextColor(30, 30, 30);
+          const al = doc.splitTextToSize(item.annotation, textAreaW);
+          doc.text(al.slice(0, 2), cardX + 4, textY); textY += Math.min(al.length, 2) * 12 + 4;
         }
-
-        // source
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(160, 160, 160);
-        doc.text(item.source || '', textX, y + 10);
-
-        // annotation
-        doc.setFontSize(10);
-        doc.setTextColor(30, 30, 30);
-        let textY = y + 24;
-        doc.text(annotationLines, textX, textY);
-        textY += annotationLines.length * 13;
-
-        // shoot direction
-        if (shootLines.length) {
-          textY += 8;
-          doc.setFontSize(9);
-          doc.setTextColor(37, 99, 235);
-          doc.text(shootLines, textX, textY);
+        if (item.shootDirection) {
+          doc.setFontSize(8); doc.setTextColor(37, 99, 235);
+          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textAreaW);
+          doc.text(sl.slice(0, 2), cardX + 4, textY); textY += Math.min(sl.length, 2) * 11 + 4;
         }
-
-        // row separator
-        doc.setDrawColor(235, 235, 235);
-        doc.setLineWidth(0.5);
-        doc.line(margin, y + rowH - 6, pageW - margin, y + rowH - 6);
-        y += rowH;
+        if (item.videoUrl) {
+          doc.setFontSize(8); doc.setTextColor(37, 99, 235);
+          const ll = 'View original ad \u2197';
+          doc.text(ll, cardX + 4, textY);
+          doc.link(cardX + 4, textY - 9, doc.getTextWidth(ll), 10, { url: item.videoUrl });
+        }
       }
-
       doc.save('shot-list.pdf');
-    } finally {
-      setPdfDownloading(false);
-    }
+    } finally { setPdfDownloading(false); }
   }
 
-  // ── library helpers
-  async function saveAnalysis() {
-    const entry = { id: Date.now().toString(), type: 'single', brand: newAdBrand.trim() || 'Untagged', adType: newAdType, dateAdded: new Date().toISOString(), thumbnail: null, url: videoUrl, analysis: videoAnalysis };
-    const video = captureVideoRef.current;
-    if (video) {
-      try {
-        const nw = videoNaturalSize?.w || 9; const nh = videoNaturalSize?.h || 16;
-        entry.thumbnail = await captureFrameFromVideo(video, '00:00:00', 300, Math.round(300 * nh / nw));
-      } catch {}
-    }
-    const updated = [entry, ...getLibrary()];
-    persistLibrary(updated); setLibrary(updated);
-    setShowSavePrompt(false); setNewAdBrand(''); setNewAdType('own');
+  // ── editor brief
+  async function labelScript() {
+    if (!editorScript.trim()) return;
+    const brollLogic = videoAnalysis?.broll_logic || groupResult?.broll_logic || null;
+    setLabelingScript(true); setLabeledScript(null);
+    try {
+      const res = await fetch('/api/label-script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ script: editorScript, brollLogic }) });
+      const data = await res.json();
+      if (data.error) { alert(data.error); return; }
+      setLabeledScript(data.result);
+    } catch { alert('Something went wrong. Please try again.'); }
+    finally { setLabelingScript(false); }
   }
-  function openFromLibrary(entry) {
-    setVideoUrl(entry.url); setVideoAnalysis(entry.analysis);
-    setShowSavePrompt(false); setCapturedFrames({}); setOpenerFrame(null);
-    setActiveTab('analysis'); setMode('analyze');
-  }
-  function deleteEntry(id) { const u = getLibrary().filter(e => e.id !== id); persistLibrary(u); setLibrary(u); }
-  function jumpToTimestamp(ts) { if (videoRef.current) { videoRef.current.currentTime = timestampToSeconds(ts); videoRef.current.play(); } }
 
-  const existingBrands = [...new Set(library.map(e => e.brand).filter(Boolean))];
-  const brandGroups = existingBrands.reduce((acc, b) => { acc[b] = library.filter(e => e.brand === b); return acc; }, {});
-  const untagged = library.filter(e => !existingBrands.includes(e.brand) || e.brand === 'Untagged');
-  if (untagged.length) brandGroups['Untagged'] = untagged;
+  // ── derived
+  const isGroup = urls.filter(u => u.trim()).length > 1;
+  const urlFilename = videoUrl ? (videoUrl.split('/').pop()?.split('.')[0] || 'Ad') : 'Ad';
 
   // ── sub-components
+
   function AdStructureBar({ data, duration, brandReveal, productReveal }) {
     if (!data?.length) return null;
     const total = timestampToSeconds(duration) || 60;
@@ -364,109 +449,62 @@ export default function Home() {
     );
   }
 
-  function AddToShotListBtn({ thumbnail, annotation, shootDirection, source }) {
+  function AddToShotListBtn({ thumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }) {
     const already = shotList.some(i => i.thumbnail === thumbnail);
     return (
       <button
-        onClick={e => { e.stopPropagation(); already ? null : addToShotList({ thumbnail, annotation, shootDirection, source }); }}
+        onClick={e => { e.stopPropagation(); already ? null : addToShotList({ thumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }); }}
         title={already ? 'Already in shot list' : 'Add to shot list'}
-        className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${already ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-900 hover:text-white'}`}>
+        style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0, transition: 'background 0.12s, color 0.12s', background: already ? C.text : '#e4e6f0', color: already ? '#fff' : C.muted }}>
         {already ? '✓' : '+'}
       </button>
     );
   }
 
-  function LibraryCard({ entry }) {
-    return (
-      <div className="relative group rounded-xl overflow-hidden bg-white border border-gray-200 cursor-pointer">
-        <div className="bg-gray-100 overflow-hidden" style={{ aspectRatio: '9/16' }}>
-          {entry.thumbnail ? <img src={entry.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-xs text-gray-300">no preview</span></div>}
-        </div>
-        <div className="p-3">
-          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${entry.adType === 'own' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>{entry.adType === 'own' ? 'Own' : 'Competitor'}</span>
-          <p className="text-xs text-gray-400 mt-1">{formatDate(entry.dateAdded)}</p>
-        </div>
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
-          <button onClick={() => openFromLibrary(entry)} className="w-full bg-white text-gray-900 text-sm font-medium py-2 rounded-lg hover:bg-gray-100 transition-colors">Open</button>
-          <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id); }} className="w-full bg-white/10 text-white text-sm py-2 rounded-lg hover:bg-white/20 transition-colors">Delete</button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Shot list sidebar
   function ShotListSidebar() {
     return (
       <>
-        {/* overlay */}
-        {shotListOpen && <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShotListOpen(false)} />}
-        {/* sidebar */}
-        <div className={`fixed top-0 right-0 h-full bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col transition-transform duration-300 ${shotListOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: 380 }}>
-          <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        {shotListOpen && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 40 }} onClick={() => setShotListOpen(false)} />}
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 380, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: shotListOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
-              <p className="text-sm font-semibold text-gray-900">Shot List</p>
-              <p className="text-xs text-gray-400">{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'} selected</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Shot List</p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'} selected</p>
             </div>
-            <div className="flex items-center gap-2">
-              {shotList.length > 0 && (
-                <button onClick={() => setShotList([])} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Clear all</button>
-              )}
-              <button onClick={() => setShotListOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none ml-2">×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {shotList.length > 0 && <button onClick={() => setShotList([])} style={{ fontSize: 12, color: C.muted, background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>}
+              <button onClick={() => setShotListOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
           </div>
-
-          {/* Notes section — always visible */}
-          <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Brief notes</p>
-            <textarea
-              value={briefNotes}
-              onChange={e => setBriefNotes(e.target.value)}
-              placeholder="Add context, brand notes, or directions for the CP..."
-              className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-2.5 resize-none focus:outline-none focus:border-gray-400"
-              rows={4} />
+          <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Brief notes</p>
+            <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..." style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={4} />
           </div>
-
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {shotList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                <p className="text-sm font-medium text-gray-900 mb-1">No frames yet</p>
-                <p className="text-xs text-gray-400 leading-relaxed">Click the <span className="inline-flex w-4 h-4 rounded-full bg-gray-100 items-center justify-center text-xs font-bold">+</span> button on any captured frame to add it here.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '0 24px' }}>
+                <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
               </div>
-            ) : (
-              shotList.map((item, i) => (
-                <div key={item.id} className="flex gap-3 bg-gray-50 rounded-xl p-3">
-                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <span className="w-5 h-5 rounded-full bg-gray-900 text-white text-xs flex items-center justify-center font-medium">{i + 1}</span>
-                    <div className="rounded-lg overflow-hidden bg-gray-200" style={{ width: 48, aspectRatio: '9/16' }}>
-                      {item.thumbnail && <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />}
-                    </div>
+            ) : shotList.map((item, i) => (
+              <div key={item.id} style={{ display: 'flex', gap: 12, background: C.surface, borderRadius: 12, padding: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{i + 1}</span>
+                  <div style={{ width: 48, borderRadius: 8, overflow: 'hidden', background: C.borderStrong, aspectRatio: '9/16' }}>
+                    {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   </div>
-                  <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                    <p className="text-xs text-gray-400">{item.source}</p>
-                    <textarea
-                      value={item.annotation}
-                      onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)}
-                      placeholder="Description..."
-                      className="w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:border-gray-400"
-                      rows={2} />
-                    <textarea
-                      value={item.shootDirection}
-                      onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)}
-                      placeholder="How to shoot this scene..."
-                      className="w-full text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2 resize-none focus:outline-none focus:border-blue-300"
-                      rows={2} />
-                  </div>
-                  <button onClick={() => removeFromShotList(item.id)} className="text-gray-300 hover:text-red-400 text-lg leading-none flex-shrink-0 mt-0.5">×</button>
                 </div>
-              ))
-            )}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <p style={{ fontSize: 11, color: C.muted }}>{item.source}</p>
+                  <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Description..." style={{ width: '100%', fontSize: 11, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
+                  <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 11, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: 8, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
+                </div>
+                <button onClick={() => removeFromShotList(item.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 18, cursor: 'pointer', lineHeight: 1, flexShrink: 0, marginTop: 2 }}>×</button>
+              </div>
+            ))}
           </div>
-
-          <div className="p-4 border-t border-gray-200 flex-shrink-0">
-            <button
-              onClick={downloadPDF}
-              disabled={pdfDownloading || shotList.length === 0}
-              className="w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+            <button onClick={downloadPDF} disabled={pdfDownloading || shotList.length === 0} style={{ width: '100%', background: pdfDownloading || shotList.length === 0 ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: pdfDownloading || shotList.length === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
               {pdfDownloading ? 'Generating PDF...' : 'Download PDF'}
             </button>
           </div>
@@ -475,167 +513,606 @@ export default function Home() {
     );
   }
 
+  function EditorBriefSidebar() {
+    const brollLogic = videoAnalysis?.broll_logic || groupResult?.broll_logic || null;
+    return (
+      <>
+        {editorBriefOpen && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 40 }} onClick={() => setEditorBriefOpen(false)} />}
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 420, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: editorBriefOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Editor Brief</p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{brollLogic ? 'B-roll logic loaded from analysis' : 'Run an analysis first to load B-roll logic'}</p>
+            </div>
+            <button onClick={() => setEditorBriefOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {brollLogic ? (
+              <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>B-roll logic</p>
+                <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6, marginBottom: 12 }}>{brollLogic.summary}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {brollLogic.rules?.map((rule, i) => {
+                    const colors = TYPE_COLORS[rule.footage_type] || 'bg-gray-100 text-gray-700';
+                    return (
+                      <div key={i} className={`rounded-lg p-2.5 bg-gray-50 flex flex-col gap-1`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${colors}`}>{TYPE_LABELS[rule.footage_type] || rule.footage_type}</span>
+                          <p className="text-xs text-gray-500 italic">"{rule.trigger}"</p>
+                        </div>
+                        <p className="text-xs text-gray-400 pl-1">{rule.reason}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Run a single ad analysis or group analysis to load the B-roll pairing logic.</p>
+              </div>
+            )}
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Script labeler</p>
+              <textarea value={editorScript} onChange={e => setEditorScript(e.target.value)} placeholder={"Paste your script here — one sentence or line per paragraph.\n\nAI will label each line with the footage type that fits best."} style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={7} />
+              <button onClick={labelScript} disabled={labelingScript || !editorScript.trim()} style={{ width: '100%', background: labelingScript || !editorScript.trim() ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: labelingScript || !editorScript.trim() ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
+                {labelingScript ? 'Labeling...' : 'Label script'}
+              </button>
+              {labeledScript?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {labeledScript.map((item, i) => {
+                    const colors = TYPE_COLORS[item.footage_type] || 'bg-gray-100 text-gray-700';
+                    return (
+                      <div key={i} className="bg-gray-50 rounded-lg p-3 flex flex-col gap-1.5">
+                        <p className="text-xs text-gray-800 leading-relaxed">"{item.line}"</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${colors}`}>{TYPE_LABELS[item.footage_type] || item.footage_type}</span>
+                          <p className="text-xs text-gray-400">{item.reason}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // ── render
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div style={{ height: '100vh', display: 'flex', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.text, background: C.bg }}>
       <ShotListSidebar />
+      <EditorBriefSidebar />
 
-      {/* Nav */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-8">
-          <h1 className="text-sm font-semibold text-gray-900 tracking-tight">Ad Intelligence</h1>
-          <nav className="flex gap-1">
-            {[{ id: 'library', label: 'Library' }, { id: 'analyze', label: 'Analyze' }, { id: 'group', label: 'Group Analysis' }].map(tab => (
-              <button key={tab.id} onClick={() => setMode(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === tab.id ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+      {/* ── Sidebar */}
+      <div style={{ width: sidebarCollapsed ? 52 : 280, minWidth: sidebarCollapsed ? 52 : 280, height: '100%', background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', transition: 'width 0.2s cubic-bezier(.4,0,.2,1), min-width 0.2s cubic-bezier(.4,0,.2,1)', overflow: 'hidden', flexShrink: 0, zIndex: 10 }}>
+
+        {/* Logo */}
+        <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 14px', borderBottom: `1px solid ${C.border}`, gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <span style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '-0.5px' }}>A</span>
+          </div>
+          {!sidebarCollapsed && <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.4px', whiteSpace: 'nowrap' }}>Ad<span style={{ color: C.accent }}>Elf</span></span>}
         </div>
-        <div className="flex items-center gap-3">
-          {mode === 'library' && (
-            <button onClick={() => setMode('analyze')} className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">+ Add ad</button>
+
+        {/* New analysis button */}
+        <div style={{ padding: sidebarCollapsed ? '10px 8px' : '10px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={goHome}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: sidebarCollapsed ? 8 : '8px 12px', cursor: 'pointer', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', transition: 'background 0.12s' }}
+            onMouseEnter={e => e.currentTarget.style.background = C.surfaceHover}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+            <span style={{ fontSize: 16, color: C.accent, lineHeight: 1, flexShrink: 0 }}>+</span>
+            {!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>New analysis</span>}
+          </button>
+        </div>
+
+        {/* Library */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: sidebarCollapsed ? '8px 6px' : '12px 10px' }}>
+          {sidebarCollapsed ? (
+            library.slice(0, 8).map((entry, i) => (
+              <div key={entry.id} title={entry.hook} onClick={() => openFromLibrary(entry)}
+                style={{ width: 40, height: 40, borderRadius: 8, background: '#fff', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '4px auto', cursor: 'pointer', overflow: 'hidden' }}>
+                {entry.thumbnail
+                  ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 10, fontWeight: 700, color: C.muted }}>{entry.type === 'group' ? 'G' : 'S'}</span>}
+              </div>
+            ))
+          ) : (
+            library.length === 0 ? (
+              <div style={{ padding: '32px 8px', textAlign: 'center' }}>
+                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Your library is empty.<br />Analyze an ad to get started.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, animation: 'slideIn 0.15s ease' }}>
+                {library.map(entry => (
+                  <div key={entry.id} style={{ position: 'relative' }}
+                    onMouseEnter={e => e.currentTarget.querySelector('.card-overlay').style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.querySelector('.card-overlay').style.opacity = '0'}>
+                    <button onClick={() => openFromLibrary(entry)}
+                      style={{ width: '100%', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', textAlign: 'left', padding: 0, cursor: 'pointer', display: 'block', transition: 'border-color 0.12s, box-shadow 0.12s' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accentBorder; e.currentTarget.style.boxShadow = '0 2px 10px rgba(37,99,235,0.1)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
+                      <div style={{ aspectRatio: '9/16', background: '#0d0f1a', position: 'relative', overflow: 'hidden' }}>
+                        {entry.thumbnail
+                          ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 20, height: 20, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, paddingLeft: 2 }}>▶</span>
+                              </div>
+                            </div>}
+                        <div style={{ position: 'absolute', top: 5, left: 5 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: entry.type === 'group' ? '#7c3aed' : C.accent, background: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: '1px 5px' }}>
+                            {entry.type === 'group' ? `${entry.urls?.length || ''}` : 'Single'}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ padding: '7px 8px 8px' }}>
+                        <p style={{ fontSize: 11, color: C.text, fontWeight: 500, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                          {entry.hook ? `"${entry.hook}"` : '—'}
+                        </p>
+                        <p style={{ fontSize: 10, color: C.muted, marginTop: 3, fontFamily: C.mono }}>{formatDate(entry.savedAt)}</p>
+                      </div>
+                    </button>
+                    <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(13,15,26,0.55)', borderRadius: 10, opacity: 0, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                      <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id); }}
+                        style={{ pointerEvents: 'auto', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           )}
-          <button onClick={() => setShotListOpen(true)}
-            className="relative flex items-center gap-2 text-sm border border-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-            Shot List
-            {shotList.length > 0 && (
-              <span className="bg-gray-900 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">{shotList.length}</span>
-            )}
+        </div>
+
+        {/* Collapse toggle */}
+        <div style={{ padding: 10, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setSidebarCollapsed(p => !p)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: 8, background: 'transparent', border: 'none', padding: '6px 8px', borderRadius: 6, color: C.muted, fontSize: 12, cursor: 'pointer', transition: 'background 0.12s' }}
+            onMouseEnter={e => e.currentTarget.style.background = C.surfaceHover}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <span style={{ fontSize: 14, display: 'inline-block', transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>←</span>
+            {!sidebarCollapsed && <span>Collapse</span>}
           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* ── Main content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-        {/* ── LIBRARY ───────────────────────────────────────────── */}
-        {mode === 'library' && (
-          <div>
-            {library.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-32 text-center">
-                <p className="text-sm font-medium text-gray-900 mb-2">Your library is empty</p>
-                <p className="text-xs text-gray-400 mb-6">Analyze a video ad and save it to build your library.</p>
-                <button onClick={() => setMode('analyze')} className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">Analyze your first ad</button>
-              </div>
-            ) : (
-              Object.entries(brandGroups).map(([brand, entries]) => !entries.length ? null : (
-                <div key={brand} className="mb-12">
-                  <div className="flex items-center gap-3 mb-5">
-                    <p className="text-xs font-semibold text-gray-900 uppercase tracking-widest">{brand}</p>
-                    <div className="flex-1 h-px bg-gray-200" />
-                    <span className="text-xs text-gray-400">{entries.length} {entries.length === 1 ? 'ad' : 'ads'}</span>
+        {/* Home view */}
+        {mode === 'home' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', animation: 'fadeUp 0.3s ease', overflowY: 'auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: 40 }}>
+              <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-1px', color: C.text, marginBottom: 8 }}>Let's strategize your way out!</h1>
+              <p style={{ fontSize: 15, color: C.muted }}>{isGroup ? 'Group analysis · find patterns across multiple ads' : 'Paste a video URL to analyze your ad'}</p>
+            </div>
+
+            <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {urls.map((url, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', animation: 'fadeUp 0.2s ease' }}>
+                  {isGroup && (
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0 }}>{i + 1}</div>
+                  )}
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '13px 16px', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.boxShadow = `0 0 0 3px ${C.accentBorder}`; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>🔗</span>
+                    <input value={url}
+                      onChange={e => { const n = [...urls]; n[i] = e.target.value; setUrls(n); }}
+                      onFocus={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('focus', { bubbles: true }))}
+                      onBlur={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('blur', { bubbles: true }))}
+                      onKeyDown={e => { if (e.key === 'Enter' && i === urls.length - 1 && urls.some(u => u.trim())) handleAnalyze(); }}
+                      placeholder={i === 0 ? 'Paste a .mp4 URL from swipekit.app or foreplay.co…' : `Video URL ${i + 1}…`}
+                      style={{ flex: 1, fontSize: 13, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: C.mono }} />
                   </div>
-                  <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                    {entries.map(entry => <LibraryCard key={entry.id} entry={entry} />)}
-                  </div>
+                  {urls.length > 1 && (
+                    <button onClick={() => setUrls(urls.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
+                  )}
                 </div>
-              ))
-            )}
+              ))}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '11px 16px', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                onFocus={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.boxShadow = `0 0 0 3px ${C.accentBorder}`; }}
+                onBlur={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
+                <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 500 }}>Context</span>
+                <input value={context} onChange={e => setContext(e.target.value)}
+                  onFocus={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('focus', { bubbles: true }))}
+                  onBlur={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('blur', { bubbles: true }))}
+                  placeholder="Brand context, target audience… (optional)"
+                  style={{ flex: 1, fontSize: 13, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }} />
+              </div>
+
+              {urls.length < 6 && (
+                <button onClick={() => setUrls([...urls, ''])}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', background: 'transparent', border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: 9, color: C.muted, fontSize: 13, cursor: 'pointer', transition: 'border-color 0.12s, color 0.12s, background 0.12s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = C.accentLight; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; e.currentTarget.style.background = 'transparent'; }}>
+                  <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
+                  <span>{isGroup ? 'Add another ad' : 'Compare with another ad'}</span>
+                </button>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                {isGroup && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 20, padding: '2px 8px' }}>
+                    Group mode · {urls.filter(u => u.trim()).length} URLs
+                  </span>
+                )}
+                <button onClick={handleAnalyze} disabled={!urls.some(u => u.trim())}
+                  style={{ width: '100%', background: urls.some(u => u.trim()) ? C.accent : C.mutedLight, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: urls.some(u => u.trim()) ? 'pointer' : 'not-allowed', transition: 'background 0.15s, transform 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  onMouseEnter={e => { if (urls.some(u => u.trim())) e.currentTarget.style.transform = 'scale(1.01)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
+                  {isGroup ? `Analyze ${urls.filter(u => u.trim()).length} ads` : 'Analyze'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ── ANALYZE ───────────────────────────────────────────── */}
-        {mode === 'analyze' && (
-          <div className="flex flex-col gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Single video analysis</p>
-              <p className="text-sm text-gray-600 mb-4">Find a video ad on{' '}<a href="https://www.swipekit.app" target="_blank" className="text-blue-500 hover:underline">swipekit.app</a>{' '}or{' '}<a href="https://www.foreplay.co" target="_blank" className="text-blue-500 hover:underline">foreplay.co</a>, copy the direct .mp4 URL and paste it below.</p>
-              <div className="mb-3">
-                <label className="block text-xs text-gray-500 mb-1">Video URL (.mp4)</label>
-                <input type="text" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://file.swipekit.app/fb-xxx.mp4" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-gray-900 focus:outline-none focus:border-gray-400" />
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">Brand context (optional)</label>
-                <input type="text" value={videoContext} onChange={e => setVideoContext(e.target.value)} placeholder="e.g. Hims hair loss ad targeting men 30-45" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-gray-400" />
-              </div>
-              <button onClick={analyzeVideo} disabled={analyzingVideo} className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {analyzingVideo ? 'Analyzing video… this takes 1-2 minutes' : 'Analyze video'}
+        {/* Analysis view */}
+        {mode === 'analysis' && (
+          <>
+            {/* Top bar */}
+            <div style={{ height: 52, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0, background: '#fff' }}>
+              <button onClick={goHome}
+                style={{ background: 'transparent', border: 'none', color: C.muted, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', transition: 'background 0.12s', flexShrink: 0 }}
+                onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                ← Back
               </button>
-              {videoError && <div className="mt-3 bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{videoError}</div>}
+              <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
+              <div style={{ fontFamily: C.mono, fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {analysisType === 'single' ? videoUrl : `${groupUrls.filter(u => u).length} videos`}
+                {(analyzingVideo || groupRunning) && (
+                  <span style={{ marginLeft: 10, display: 'inline-flex', alignItems: 'center', gap: 5, color: C.accent }}>
+                    <span style={{ width: 10, height: 10, border: `2px solid ${C.accentBorder}`, borderTop: `2px solid ${C.accent}`, borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+                    Analyzing…
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setEditorBriefOpen(true)}
+                style={{ fontSize: 12, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, transition: 'background 0.12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                Editor Brief
+              </button>
+              <button onClick={() => setShotListOpen(true)}
+                style={{ fontSize: 12, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                Shot List
+                {shotList.length > 0 && <span style={{ background: C.text, color: '#fff', fontSize: 10, borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{shotList.length}</span>}
+              </button>
             </div>
 
-            {showSavePrompt && videoAnalysis && (
-              <div className="bg-gray-900 rounded-xl p-4 flex items-center gap-4 flex-wrap">
-                <p className="text-sm font-medium text-white whitespace-nowrap">Save to library</p>
-                <input value={newAdBrand} onChange={e => setNewAdBrand(e.target.value)} list="brand-suggestions" placeholder="Brand name…" className="border border-white/20 bg-white/10 text-white placeholder-white/40 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-white/50 w-44" />
-                <datalist id="brand-suggestions">{existingBrands.map(b => <option key={b} value={b} />)}</datalist>
-                <div className="flex gap-1 bg-white/10 rounded-lg p-1">
-                  {['own', 'competitor'].map(t => (
-                    <button key={t} onClick={() => setNewAdType(t)} className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors ${newAdType === t ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white'}`}>{t}</button>
-                  ))}
-                </div>
-                <button onClick={saveAnalysis} className="bg-white text-gray-900 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors ml-auto">Save</button>
-                <button onClick={() => setShowSavePrompt(false)} className="text-white/40 hover:text-white text-xl leading-none">×</button>
-              </div>
-            )}
+            {/* Scrollable analysis content */}
+            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeUp 0.25s ease' }}>
+              <div className="max-w-7xl mx-auto px-6 py-8">
 
-            {videoAnalysis && (
-              <>
-                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-                  <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Analysis</button>
-                  <button onClick={() => setActiveTab('framebyfrime')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'framebyfrime' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Frame by frame</button>
-                </div>
-
-                <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
+                {/* ── Single analysis */}
+                {analysisType === 'single' && (
                   <div className="flex flex-col gap-4">
-                    {activeTab === 'analysis' && (
+                    {analyzingVideo && (
+                      <div className="flex items-center justify-center py-32">
+                        <div className="text-center">
+                          <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
+                          <p style={{ fontSize: 14, color: C.muted }}>Analyzing video… this takes 1–2 minutes</p>
+                        </div>
+                      </div>
+                    )}
+                    {videoError && <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">{videoError}</div>}
+                    {videoAnalysis && (
                       <>
-                        <div className="bg-white border border-gray-200 rounded-xl p-6">
-                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
-                          <div className="flex gap-4 mb-4">
-                            {openerFrame && (
-                              <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 72, height: 128 }} onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
-                                <img src={openerFrame} alt="Opener frame" className="w-full h-full object-cover" />
-                              </div>
-                            )}
-                            <p className="text-2xl font-medium text-gray-900 leading-snug">"{videoAnalysis.general?.hook?.copy}"</p>
-                          </div>
-                          <div className="border-t border-gray-100 pt-4">
-                            <p className="text-xs text-gray-400 mb-1">Visual opener</p>
-                            <p className="text-sm text-gray-700 leading-relaxed mb-3">{videoAnalysis.general?.hook?.visual}</p>
-                            <button onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')} className="text-xs text-blue-500 hover:text-blue-700 font-mono hover:underline">▶ {videoAnalysis.general?.opener?.timestamp || '00:00:00'} — Jump to opener</button>
-                          </div>
+                        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+                          <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'analysis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Analysis</button>
+                          <button onClick={() => setActiveTab('framebyfrime')} className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${activeTab === 'framebyfrime' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Frame by frame</button>
                         </div>
 
-                        <AdStructureBar data={videoAnalysis.general?.ad_structure} duration={videoAnalysis.general?.duration} brandReveal={videoAnalysis.general?.brand_reveal?.timestamp} productReveal={videoAnalysis.general?.product_reveal?.timestamp} />
-
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            { label: 'Total time', value: videoAnalysis.general?.duration ?? '—' },
-                            { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
-                            { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.brand_reveal?.timestamp },
-                            { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.product_reveal?.timestamp },
-                          ].map(stat => (
-                            <div key={stat.label} onClick={() => stat.ts && jumpToTimestamp(stat.ts)} className={`bg-white border border-gray-200 rounded-xl p-4 text-center ${stat.ts ? 'cursor-pointer hover:border-blue-300 transition-colors' : ''}`}>
-                              <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
-                              <p className={`text-lg font-medium ${stat.ts ? 'text-blue-600' : 'text-gray-900'}`}>{stat.value}</p>
-                            </div>
-                          ))}
-                        </div>
-
-                        {videoAnalysis.general?.value_propositions?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Value propositions</p>
-                            <div className="flex flex-col gap-2">
-                              {videoAnalysis.general.value_propositions.map((vp, i) => (
-                                <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                                  <div className="flex flex-col gap-1">
-                                    <p className="text-sm font-medium text-gray-800 leading-snug">{vp.summary ?? vp}</p>
-                                    {vp.copy && <p className="text-xs text-gray-500 leading-relaxed italic">"{vp.copy}"</p>}
+                        <div className="grid gap-6 items-start" style={{ gridTemplateColumns: '3fr 2fr' }}>
+                          <div className="flex flex-col gap-4">
+                            {activeTab === 'analysis' && (
+                              <>
+                                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Hook & opener</p>
+                                  <div className="flex gap-4 mb-4">
+                                    {openerFrame && (
+                                      <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 72, height: 128 }} onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
+                                        <img src={openerFrame} alt="Opener frame" className="w-full h-full object-cover" />
+                                      </div>
+                                    )}
+                                    <p className="text-2xl font-medium text-gray-900 leading-snug">"{videoAnalysis.general?.hook?.copy}"</p>
+                                  </div>
+                                  <div className="border-t border-gray-100 pt-4">
+                                    <p className="text-xs text-gray-400 mb-1">Visual opener</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed mb-3">{videoAnalysis.general?.hook?.visual}</p>
+                                    <button onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')} className="text-xs text-blue-500 hover:text-blue-700 font-mono hover:underline">▶ {videoAnalysis.general?.opener?.timestamp || '00:00:00'} — Jump to opener</button>
                                   </div>
                                 </div>
+
+                                <AdStructureBar data={videoAnalysis.general?.ad_structure} duration={videoAnalysis.general?.duration} brandReveal={videoAnalysis.general?.brand_reveal?.timestamp} productReveal={videoAnalysis.general?.product_reveal?.timestamp} />
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  {[
+                                    { label: 'Total time', value: videoAnalysis.general?.duration ?? '—' },
+                                    { label: 'Total cuts', value: videoAnalysis.timeline?.length ?? '—' },
+                                    { label: 'Brand reveal', value: videoAnalysis.general?.brand_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.brand_reveal?.timestamp },
+                                    { label: 'Product reveal', value: videoAnalysis.general?.product_reveal?.timestamp ?? '—', ts: videoAnalysis.general?.product_reveal?.timestamp },
+                                  ].map(stat => (
+                                    <div key={stat.label} onClick={() => stat.ts && jumpToTimestamp(stat.ts)} className={`bg-white border border-gray-200 rounded-xl p-4 text-center ${stat.ts ? 'cursor-pointer hover:border-blue-300 transition-colors' : ''}`}>
+                                      <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
+                                      <p className={`text-lg font-medium ${stat.ts ? 'text-blue-600' : 'text-gray-900'}`}>{stat.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {videoAnalysis.general?.value_propositions?.length > 0 && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Value propositions</p>
+                                    <div className="flex flex-col gap-2">
+                                      {videoAnalysis.general.value_propositions.map((vp, i) => (
+                                        <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
+                                          <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                                          <div className="flex flex-col gap-1">
+                                            <p className="text-sm font-medium text-gray-800 leading-snug">{vp.summary ?? vp}</p>
+                                            {vp.copy && <p className="text-xs text-gray-500 leading-relaxed italic">"{vp.copy}"</p>}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {videoAnalysis.general?.talent && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
+                                    <div className="flex flex-col gap-2">
+                                      {[{ label: 'Appearance', value: videoAnalysis.general.talent.appearance }, { label: 'Clothing', value: videoAnalysis.general.talent.clothing }, { label: 'Setting', value: videoAnalysis.general.talent.setting }, { label: 'Energy', value: videoAnalysis.general.talent.energy }].map(item => item.value ? (
+                                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                                          <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
+                                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                                        </div>
+                                      ) : null)}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {videoAnalysis.general?.cta && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
+                                    <div className="flex items-center gap-3">
+                                      <button onClick={() => jumpToTimestamp(videoAnalysis.general.cta.timestamp)} className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors flex-shrink-0">{videoAnalysis.general.cta.timestamp}</button>
+                                      <p className="text-sm font-medium text-gray-900">"{videoAnalysis.general.cta.text}"</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {videoAnalysis.broll_logic && (
+                                  <button onClick={() => setEditorBriefOpen(true)} style={{ width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+                                    onMouseLeave={e => e.currentTarget.style.background = C.accent}>
+                                    Apply this editing logic to a script →
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {activeTab === 'framebyfrime' && (
+                              <>
+                                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                                  <div className="px-5 py-4 border-b border-gray-100">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {capturingFrames ? `Capturing ${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length}…` : Object.keys(capturedFrames).length > 0 ? `${Object.keys(capturedFrames).length} frames captured` : 'Click any frame to jump to that moment'}
+                                    </p>
+                                  </div>
+                                  <div className="divide-y divide-gray-50">
+                                    {videoAnalysis.timeline?.map((row, i) => {
+                                      const frame = capturedFrames[row.timestamp];
+                                      return (
+                                        <div key={i} className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors" onClick={() => jumpToTimestamp(row.timestamp)}>
+                                          <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: 60, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
+                                            {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center">{capturingFrames ? <span className="text-xs text-gray-300">…</span> : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}</div>}
+                                          </div>
+                                          <div className="flex-1 min-w-0 py-0.5">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                              <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
+                                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>{TYPE_LABELS[row.type] || row.type}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-700 leading-relaxed mb-1">{row.visual}</p>
+                                            {row.copy && <p className="text-xs text-gray-400 italic leading-relaxed">"{row.copy}"</p>}
+                                          </div>
+                                          {frame && (
+                                            <div className="flex-shrink-0 self-center" onClick={e => e.stopPropagation()}>
+                                              <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {videoAnalysis.copy_only?.length > 0 && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Copy only</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{videoAnalysis.copy_only.filter(c => c.text).map(c => c.text).join(' ')}</p>
+                                  </div>
+                                )}
+
+                                {videoAnalysis.transferrable_copy?.length > 0 && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
+                                      <button onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(i => i.template).join('\n'))} className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50 transition-colors">Copy all</button>
+                                    </div>
+                                    <p className="text-sm text-gray-800 leading-relaxed">{videoAnalysis.transferrable_copy.map(i => i.template).join(' ')}</p>
+                                  </div>
+                                )}
+
+                                {videoAnalysis.broll_shots?.length > 0 && (
+                                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
+                                    <div className="flex flex-col">
+                                      {videoAnalysis.broll_shots.map((shot, i) => {
+                                        const ts = shot.timestamp || null;
+                                        const desc = shot.description ?? shot;
+                                        const frame = ts ? capturedFrames[ts] : null;
+                                        return (
+                                          <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 -mx-5 px-5 hover:bg-gray-50/50 transition-colors">
+                                            <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 48, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }} onClick={() => ts && jumpToTimestamp(ts)}>
+                                              {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-gray-300 text-xs font-mono">{ts || '—'}</span></div>}
+                                            </div>
+                                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => ts && jumpToTimestamp(ts)}>
+                                              {ts && <span className="text-xs font-mono text-blue-500 block mb-0.5">{ts}</span>}
+                                              <p className="text-sm text-gray-700 leading-relaxed">{desc}</p>
+                                            </div>
+                                            {frame && <AddToShotListBtn thumbnail={frame} annotation={desc} shootDirection={desc} source={`${urlFilename} · ${ts}`} videoUrl={videoUrl} />}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+
+                          <div style={{ position: 'sticky', top: 16 }}>
+                            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                              <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: 360 }} />
+                              <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
+                                onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
+                              <div className="px-4 py-3 border-t border-gray-100">
+                                <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Group analysis */}
+                {analysisType === 'group' && (
+                  <div className="flex flex-col gap-4">
+                    {/* hidden capture videos */}
+                    <div style={{ display: 'none' }}>
+                      {groupUrls.filter(u => u.trim()).map((url, i) => (
+                        <video key={i} ref={el => groupVideoRefs.current[i] = el}
+                          src={`/api/proxy-video?url=${encodeURIComponent(url)}`}
+                          crossOrigin="anonymous" preload="auto" />
+                      ))}
+                    </div>
+
+                    {groupRunning && (
+                      <div className="flex items-center justify-center py-32">
+                        <div className="text-center">
+                          <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
+                          <p style={{ fontSize: 14, color: C.muted }}>Analyzing group… this may take a few minutes</p>
+                        </div>
+                      </div>
+                    )}
+                    {groupError && <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">{groupError}</div>}
+
+                    {groupResult && (
+                      <div className="flex flex-col gap-4">
+                        {groupResult.key_frames?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Key frames</p>
+                            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                              {groupResult.key_frames.map((kf, i) => {
+                                const key = `${kf.video_index}:${kf.timestamp}`;
+                                const frame = groupKeyFrames[key];
+                                return (
+                                  <div key={i} className="flex flex-col gap-2">
+                                    <div className="relative rounded-lg overflow-hidden bg-gray-100" style={{ aspectRatio: '9/16' }}>
+                                      {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-xs text-gray-300 font-mono">{kf.timestamp}</span></div>}
+                                      {frame && (
+                                        <div className="absolute top-1.5 right-1.5" onClick={e => e.stopPropagation()}>
+                                          <AddToShotListBtn thumbnail={frame} annotation={kf.visual} shootDirection={kf.shoot_direction} source={`Group · Video ${kf.video_index + 1} · ${kf.timestamp}`} videoUrl={groupUrls[kf.video_index]} />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-mono text-blue-500">{kf.timestamp}</p>
+                                      <p className="text-xs text-gray-600 leading-snug mt-0.5">{kf.visual}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {groupResult.common_hooks?.length > 0 && (
+                          <div className="flex flex-col gap-3">
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Common hooks</p>
+                            {groupResult.common_hooks.map((h, i) => (
+                              <div key={i} className="bg-white border border-gray-200 rounded-xl p-5">
+                                <p className="text-xl font-medium text-gray-900 leading-snug mb-2">"{h.copy}"</p>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Appears in {h.appears_in} ads</span>
+                                  <p className="text-xs text-gray-500">{h.strategy}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {groupResult.keyword_clusters?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Keyword clusters</p>
+                            <div className="flex flex-wrap gap-2">
+                              {groupResult.keyword_clusters.map((k, i) => (
+                                <span key={i} className={`bg-gray-100 text-gray-800 px-3 py-1 rounded-full font-medium ${k.frequency === 'high' ? 'text-base' : k.frequency === 'medium' ? 'text-sm' : 'text-xs'}`}>{k.word}</span>
                               ))}
                             </div>
                           </div>
                         )}
 
-                        {videoAnalysis.general?.talent && (
+                        {groupResult.visual_pattern && (
                           <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent</p>
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Visual pattern</p>
                             <div className="flex flex-col gap-2">
-                              {[{ label: 'Appearance', value: videoAnalysis.general.talent.appearance }, { label: 'Clothing', value: videoAnalysis.general.talent.clothing }, { label: 'Setting', value: videoAnalysis.general.talent.setting }, { label: 'Energy', value: videoAnalysis.general.talent.energy }].map(item => item.value ? (
+                              {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].map(item => item.value ? (
+                                <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
+                                  <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
+                                  <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
+                                </div>
+                              ) : null)}
+                            </div>
+                          </div>
+                        )}
+
+                        {groupResult.ad_structure_template?.length > 0 && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Typical ad structure</p>
+                            <div className="flex flex-col gap-2">
+                              {groupResult.ad_structure_template.map((s, i) => {
+                                const c = SECTION_COLORS[s.section] || { light: 'bg-gray-50', text: 'text-gray-700' };
+                                return (
+                                  <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${c.light} ${c.text}`}>{s.section}</span>
+                                    <p className="text-xs text-gray-600 leading-relaxed">{s.description}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {groupResult.talent_pattern && (
+                          <div className="bg-white border border-gray-200 rounded-xl p-5">
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent pattern</p>
+                            <div className="flex flex-col gap-2">
+                              {[{ label: 'Appearance', value: groupResult.talent_pattern.appearance }, { label: 'Clothing', value: groupResult.talent_pattern.clothing }, { label: 'Setting', value: groupResult.talent_pattern.setting }, { label: 'Energy', value: groupResult.talent_pattern.energy }].map(item => item.value ? (
                                 <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
                                   <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
                                   <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
@@ -645,283 +1122,38 @@ export default function Home() {
                           </div>
                         )}
 
-                        {videoAnalysis.general?.cta && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">CTA</p>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => jumpToTimestamp(videoAnalysis.general.cta.timestamp)} className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors flex-shrink-0">{videoAnalysis.general.cta.timestamp}</button>
-                              <p className="text-sm font-medium text-gray-900">"{videoAnalysis.general.cta.text}"</p>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {activeTab === 'framebyfrime' && (
-                      <>
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="px-5 py-4 border-b border-gray-100">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Frame by frame</p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {capturingFrames ? `Capturing ${Object.keys(capturedFrames).length} of ${videoAnalysis.timeline?.length}…` : Object.keys(capturedFrames).length > 0 ? `${Object.keys(capturedFrames).length} frames captured` : 'Click any frame to jump to that moment'}
-                            </p>
-                          </div>
-                          <div className="divide-y divide-gray-50">
-                            {videoAnalysis.timeline?.map((row, i) => {
-                              const frame = capturedFrames[row.timestamp];
-                              const brand = newAdBrand || library.find(e => e.url === videoUrl)?.brand || 'Ad';
-                              return (
-                                <div key={i} className="flex gap-4 px-5 py-4 hover:bg-blue-50/30 cursor-pointer transition-colors" onClick={() => jumpToTimestamp(row.timestamp)}>
-                                  <div className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: 60, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }}>
-                                    {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center">{capturingFrames ? <span className="text-xs text-gray-300">…</span> : <span className="text-xs font-mono text-blue-300">{row.timestamp}</span>}</div>}
-                                  </div>
-                                  <div className="flex-1 min-w-0 py-0.5">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                      <span className="text-xs font-mono text-blue-500">{row.timestamp}</span>
-                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[row.type] || 'bg-gray-100 text-gray-600'}`}>{TYPE_LABELS[row.type] || row.type}</span>
-                                    </div>
-                                    <p className="text-xs text-gray-700 leading-relaxed mb-1">{row.visual}</p>
-                                    {row.copy && <p className="text-xs text-gray-400 italic leading-relaxed">"{row.copy}"</p>}
-                                  </div>
-                                  {frame && (
-                                    <div className="flex-shrink-0 self-center" onClick={e => e.stopPropagation()}>
-                                      <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${brand} · ${row.timestamp}`} />
-                                    </div>
-                                  )}
+                        {groupResult.strongest_patterns?.length > 0 && (
+                          <div className="flex flex-col gap-3">
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Strongest patterns</p>
+                            {groupResult.strongest_patterns.map((p, i) => (
+                              <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
+                                <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">{i + 1}</div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 mb-1">{p.title}</p>
+                                  <p className="text-sm text-gray-500 leading-relaxed">{p.observation}</p>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {videoAnalysis.copy_only?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Copy only</p>
-                            <p className="text-sm text-gray-700 leading-relaxed">{videoAnalysis.copy_only.filter(c => c.text).map(c => c.text).join(' ')}</p>
+                              </div>
+                            ))}
                           </div>
                         )}
 
-                        {videoAnalysis.transferrable_copy?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <div className="flex items-center justify-between mb-3">
-                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Transferrable format</p>
-                              <button onClick={() => navigator.clipboard.writeText(videoAnalysis.transferrable_copy.map(i => i.template).join('\n'))} className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-md px-2 py-1 hover:bg-gray-50 transition-colors">Copy all</button>
-                            </div>
-                            <p className="text-sm text-gray-800 leading-relaxed">{videoAnalysis.transferrable_copy.map(i => i.template).join(' ')}</p>
-                          </div>
+                        {groupResult.broll_logic && (
+                          <button onClick={() => setEditorBriefOpen(true)} style={{ width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+                            onMouseLeave={e => e.currentTarget.style.background = C.accent}>
+                            Apply this editing logic to a script →
+                          </button>
                         )}
-
-                        {videoAnalysis.broll_shots?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">B-rolls to shoot</p>
-                            <div className="flex flex-col">
-                              {videoAnalysis.broll_shots.map((shot, i) => {
-                                const ts = shot.timestamp || null;
-                                const desc = shot.description ?? shot;
-                                const frame = ts ? capturedFrames[ts] : null;
-                                const brand = newAdBrand || library.find(e => e.url === videoUrl)?.brand || 'Ad';
-                                return (
-                                  <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 -mx-5 px-5 hover:bg-gray-50/50 transition-colors">
-                                    <div className="flex-shrink-0 rounded-md overflow-hidden bg-gray-100 cursor-pointer" style={{ width: 48, aspectRatio: videoNaturalSize ? `${videoNaturalSize.w}/${videoNaturalSize.h}` : '9/16' }} onClick={() => ts && jumpToTimestamp(ts)}>
-                                      {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-gray-300 text-xs font-mono">{ts || '—'}</span></div>}
-                                    </div>
-                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => ts && jumpToTimestamp(ts)}>
-                                      {ts && <span className="text-xs font-mono text-blue-500 block mb-0.5">{ts}</span>}
-                                      <p className="text-sm text-gray-700 leading-relaxed">{desc}</p>
-                                    </div>
-                                    {frame && <AddToShotListBtn thumbnail={frame} annotation={desc} shootDirection={desc} source={`${brand} · ${ts}`} />}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </>
+                      </div>
                     )}
                   </div>
+                )}
 
-                  <div style={{ position: 'sticky', top: 80 }}>
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                      <video ref={videoRef} src={videoUrl} controls className="w-full" style={{ maxHeight: 360 }} />
-                      <video ref={captureVideoRef} src={`/api/proxy-video?url=${encodeURIComponent(videoUrl)}`} crossOrigin="anonymous" preload="auto" style={{ display: 'none' }}
-                        onLoadedMetadata={e => setVideoNaturalSize({ w: e.target.videoWidth, h: e.target.videoHeight })} />
-                      <div className="px-4 py-3 border-t border-gray-100">
-                        <p className="text-xs text-gray-400">Click any timestamp to jump to that moment</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── GROUP ANALYSIS ────────────────────────────────────── */}
-        {mode === 'group' && (
-          <div className="flex flex-col gap-4">
-            {/* hidden capture videos for key frames */}
-            <div style={{ display: 'none' }}>
-              {groupUrls.filter(u => u.trim()).map((url, i) => (
-                <video key={i} ref={el => groupVideoRefs.current[i] = el}
-                  src={`/api/proxy-video?url=${encodeURIComponent(url)}`}
-                  crossOrigin="anonymous" preload="auto" />
-              ))}
+              </div>
             </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Group analysis</p>
-              <p className="text-sm text-gray-600 mb-4">Add 2–6 video URLs from the same brand or trend. AI will find what they have in common.</p>
-              <div className="flex flex-col gap-2 mb-3">
-                {groupUrls.map((url, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <input type="text" value={url} onChange={e => { const u = [...groupUrls]; u[i] = e.target.value; setGroupUrls(u); }} placeholder="https://file.swipekit.app/fb-xxx.mp4" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-gray-900 focus:outline-none focus:border-gray-400" />
-                    {groupUrls.length > 2 && <button onClick={() => setGroupUrls(groupUrls.filter((_, j) => j !== i))} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>}
-                  </div>
-                ))}
-              </div>
-              {groupUrls.length < 6 && <button onClick={() => setGroupUrls([...groupUrls, ''])} className="text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full bg-white hover:bg-gray-50 transition-colors mb-3">+ Add video</button>}
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">Context (optional)</label>
-                <input type="text" value={groupContext} onChange={e => setGroupContext(e.target.value)} placeholder="e.g. Hims hair loss ads — Q4 2024 batch" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-gray-400" />
-              </div>
-              <button onClick={runGroupAnalysis} disabled={groupRunning} className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {groupRunning ? 'Analyzing… this may take a few minutes' : 'Run group analysis'}
-              </button>
-              {groupError && <div className="mt-3 bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2.5">{groupError}</div>}
-            </div>
-
-            {groupResult && (
-              <div className="flex flex-col gap-4">
-
-                {/* Key frames */}
-                {groupResult.key_frames?.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Key frames</p>
-                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-                      {groupResult.key_frames.map((kf, i) => {
-                        const key = `${kf.video_index}:${kf.timestamp}`;
-                        const frame = groupKeyFrames[key];
-                        return (
-                          <div key={i} className="flex flex-col gap-2">
-                            <div className="relative rounded-lg overflow-hidden bg-gray-100" style={{ aspectRatio: '9/16' }}>
-                              {frame
-                                ? <img src={frame} alt="" className="w-full h-full object-contain" />
-                                : <div className="w-full h-full flex items-center justify-center"><span className="text-xs text-gray-300 font-mono">{kf.timestamp}</span></div>}
-                              {frame && (
-                                <div className="absolute top-1.5 right-1.5" onClick={e => e.stopPropagation()}>
-                                  <AddToShotListBtn thumbnail={frame} annotation={kf.visual} shootDirection={kf.shoot_direction} source={`Group · Video ${kf.video_index + 1} · ${kf.timestamp}`} />
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-mono text-blue-500">{kf.timestamp}</p>
-                              <p className="text-xs text-gray-600 leading-snug mt-0.5">{kf.visual}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Common hooks */}
-                {groupResult.common_hooks?.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Common hooks</p>
-                    {groupResult.common_hooks.map((h, i) => (
-                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-5">
-                        <p className="text-xl font-medium text-gray-900 leading-snug mb-2">"{h.copy}"</p>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Appears in {h.appears_in} ads</span>
-                          <p className="text-xs text-gray-500">{h.strategy}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Keyword clusters */}
-                {groupResult.keyword_clusters?.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Keyword clusters</p>
-                    <div className="flex flex-wrap gap-2">
-                      {groupResult.keyword_clusters.map((k, i) => (
-                        <span key={i} className={`bg-gray-100 text-gray-800 px-3 py-1 rounded-full font-medium ${k.frequency === 'high' ? 'text-base' : k.frequency === 'medium' ? 'text-sm' : 'text-xs'}`}>{k.word}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Visual pattern */}
-                {groupResult.visual_pattern && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Visual pattern</p>
-                    <div className="flex flex-col gap-2">
-                      {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].map(item => item.value ? (
-                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                          <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
-                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-                        </div>
-                      ) : null)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Ad structure template */}
-                {groupResult.ad_structure_template?.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Typical ad structure</p>
-                    <div className="flex flex-col gap-2">
-                      {groupResult.ad_structure_template.map((s, i) => {
-                        const c = SECTION_COLORS[s.section] || { light: 'bg-gray-50', text: 'text-gray-700' };
-                        return (
-                          <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${c.light} ${c.text}`}>{s.section}</span>
-                            <p className="text-xs text-gray-600 leading-relaxed">{s.description}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Talent pattern */}
-                {groupResult.talent_pattern && (
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent pattern</p>
-                    <div className="flex flex-col gap-2">
-                      {[{ label: 'Appearance', value: groupResult.talent_pattern.appearance }, { label: 'Clothing', value: groupResult.talent_pattern.clothing }, { label: 'Setting', value: groupResult.talent_pattern.setting }, { label: 'Energy', value: groupResult.talent_pattern.energy }].map(item => item.value ? (
-                        <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                          <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
-                          <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-                        </div>
-                      ) : null)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Strongest patterns */}
-                {groupResult.strongest_patterns?.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Strongest patterns</p>
-                    {groupResult.strongest_patterns.map((p, i) => (
-                      <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
-                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">{i + 1}</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 mb-1">{p.title}</p>
-                          <p className="text-sm text-gray-500 leading-relaxed">{p.observation}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              </div>
-            )}
-          </div>
+          </>
         )}
-
       </div>
-    </main>
+    </div>
   );
 }
