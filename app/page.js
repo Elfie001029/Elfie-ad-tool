@@ -166,7 +166,10 @@ export default function Home() {
   const [groupResult, setGroupResult] = useState(null);
   const [groupRunning, setGroupRunning] = useState(false);
   const [groupError, setGroupError] = useState('');
-  const [groupKeyFrames, setGroupKeyFrames] = useState({});
+  const [groupKeyFrames, setGroupKeyFrames] = useState({}); // "vidIdx:timestamp" → dataUrl
+  const [groupFirstFrames, setGroupFirstFrames] = useState({}); // vidIdx → dataUrl
+  const [groupSelectedVideoIdx, setGroupSelectedVideoIdx] = useState(null);
+  const [groupHoveredFrame, setGroupHoveredFrame] = useState(null); // { videoIdx, frameIdx }
   const groupVideoRefs = useRef([]);
 
   // ── editor brief
@@ -195,9 +198,13 @@ export default function Home() {
     if (videoAnalysis?.general?.opener?.timestamp) captureOpenerFrame(videoAnalysis.general.opener.timestamp);
   }, [videoAnalysis]);
   useEffect(() => {
-    if (!groupResult?.key_frames?.length) return;
     const filledUrls = groupUrls.filter(u => u.trim());
-    captureGroupKeyFrames(groupResult.key_frames, filledUrls, groupResult);
+    // Support new video_analyses structure and old key_frames fallback
+    const frames = groupResult?.video_analyses
+      ? groupResult.video_analyses.flatMap(va => va.frames.map(f => ({ ...f, video_index: va.video_index })))
+      : (groupResult?.key_frames || []);
+    if (!frames.length) return;
+    captureGroupFrames(frames, filledUrls, groupResult);
   }, [groupResult]);
 
   // ── navigation
@@ -206,7 +213,7 @@ export default function Home() {
     setUrls(['']); setContext('');
     setVideoAnalysis(null); setGroupResult(null);
     setVideoError(''); setGroupError('');
-    setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({});
+    setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({}); setGroupFirstFrames({}); setGroupSelectedVideoIdx(null); setGroupHoveredFrame(null);
   }
 
   // ── main analyze handler
@@ -276,28 +283,31 @@ export default function Home() {
   }
 
   // ── frame capture
-  async function captureGroupKeyFrames(keyFrames, urls, result) {
+  async function captureGroupFrames(frameList, urls, result) {
     const frames = {};
-    for (const kf of keyFrames) {
-      const url = urls[kf.video_index];
-      if (!url) continue;
+    const firstFrames = {};
+    for (const kf of frameList) {
       const video = groupVideoRefs.current[kf.video_index];
       if (!video) continue;
+      if (video.readyState < 1) {
+        await new Promise(resolve => {
+          video.addEventListener('loadedmetadata', resolve, { once: true });
+          if (video.networkState === 0) video.load();
+        });
+      }
       const nw = video.videoWidth || 9; const nh = video.videoHeight || 16;
       const w = 160; const h = Math.round(w * nh / nw);
       const dataUrl = await captureFrameFromVideo(video, kf.timestamp, w, h);
-      frames[`${kf.video_index}:${kf.timestamp}`] = dataUrl;
+      const key = `${kf.video_index}:${kf.timestamp}`;
+      frames[key] = dataUrl;
+      // Track first captured frame per video for left panel thumbnail
+      if (!firstFrames[kf.video_index] && dataUrl) firstFrames[kf.video_index] = dataUrl;
       setGroupKeyFrames({ ...frames });
+      setGroupFirstFrames({ ...firstFrames });
     }
     if (freshGroupAnalysis.current) {
       freshGroupAnalysis.current = false;
-      const byVideo = {};
-      for (const kf of keyFrames) {
-        if (!byVideo[kf.video_index] && frames[`${kf.video_index}:${kf.timestamp}`]) {
-          byVideo[kf.video_index] = frames[`${kf.video_index}:${kf.timestamp}`];
-        }
-      }
-      const thumbnail = await createGroupThumbnail(Object.values(byVideo));
+      const thumbnail = await createGroupThumbnail(Object.values(firstFrames));
       await autoSaveGroup(urls, result, thumbnail);
     }
   }
@@ -336,7 +346,7 @@ export default function Home() {
   function openFromLibrary(entry) {
     if (entry.type === 'group') {
       setGroupUrls(entry.urls || []); setGroupContext('');
-      setGroupResult(entry.groupResult); setGroupKeyFrames({});
+      setGroupResult(entry.groupResult); setGroupKeyFrames({}); setGroupFirstFrames({}); setGroupSelectedVideoIdx(null); setGroupHoveredFrame(null);
       setAnalysisType('group'); setMode('analysis');
     } else {
       setVideoUrl(entry.urls?.[0] || entry.url || '');
@@ -1187,176 +1197,292 @@ export default function Home() {
                     )}
                     {groupError && <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">{groupError}</div>}
 
-                    {groupResult && (
-                      <div className="flex flex-col gap-4">
+                    {groupResult && (() => {
+                      const filledUrls = groupUrls.filter(u => u.trim());
+                      // Normalize video_analyses (new) or fall back to key_frames (old)
+                      const videoAnalyses = groupResult.video_analyses || filledUrls.map((_, idx) => {
+                        const kfs = (groupResult.key_frames || []).filter(k => k.video_index === idx);
+                        return { video_index: idx, frames: kfs.map(k => ({ ...k, is_starred: true, why_starred: null, copy: '' })) };
+                      });
 
-                        {/* ── Source videos — individual analyze buttons */}
-                        <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 20px' }}>
-                          <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>Source videos</p>
-                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                            {groupUrls.filter(u => u.trim()).map((url, idx) => {
-                              // Find first key frame thumbnail for this video
-                              const kf = groupResult.key_frames?.find(k => k.video_index === idx);
-                              const thumb = kf ? groupKeyFrames[`${kf.video_index}:${kf.timestamp}`] : null;
-                              const filename = url.split('/').pop()?.split('.')[0]?.slice(0, 28) || `Video ${idx + 1}`;
+                      return (
+                        <div style={{ display: 'flex', height: '100%', gap: 0 }}>
+
+                          {/* ── LEFT: video thumbnails + stats */}
+                          <div style={{ width: 200, minWidth: 200, flexShrink: 0, position: 'sticky', top: 0, alignSelf: 'flex-start', paddingRight: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {filledUrls.map((url, idx) => {
+                              const thumb = groupFirstFrames[idx];
+                              const isSelected = groupSelectedVideoIdx === idx;
                               return (
-                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 12px 8px 8px', flex: '1 1 200px', minWidth: 0 }}>
-                                  {/* thumb */}
-                                  <div style={{ width: 36, height: 64, borderRadius: 6, overflow: 'hidden', background: '#1a1c2e', flexShrink: 0 }}>
-                                    {thumb && <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                <div key={idx}
+                                  style={{ borderRadius: 10, overflow: 'hidden', background: '#0d0f1a', border: `2px solid ${isSelected ? C.accent : C.border}`, cursor: 'pointer', transition: 'border-color 0.15s' }}
+                                  onClick={() => setGroupSelectedVideoIdx(isSelected ? null : idx)}>
+                                  {/* thumbnail */}
+                                  <div style={{ position: 'relative', aspectRatio: '9/16' }}>
+                                    {thumb
+                                      ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          <div style={{ width: 18, height: 18, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 8, paddingLeft: 2 }}>▶</span>
+                                          </div>
+                                        </div>}
+                                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.6)', borderRadius: 5, padding: '2px 6px' }}>
+                                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>Video {idx + 1}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p style={{ fontSize: 11, fontWeight: 600, color: C.text, marginBottom: 2 }}>Video {idx + 1}</p>
-                                    <p style={{ fontSize: 10, color: C.muted, fontFamily: C.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{filename}</p>
+                                  {/* inline video player — shown when selected */}
+                                  {isSelected && (
+                                    <video src={url} controls autoPlay style={{ width: '100%', display: 'block', background: '#000' }} onClick={e => e.stopPropagation()} />
+                                  )}
+                                  {/* analyze individually */}
+                                  <div style={{ padding: '8px 10px', background: '#fff', borderTop: `1px solid ${C.border}` }}>
+                                    <button
+                                      onClick={async e => {
+                                        e.stopPropagation();
+                                        setVideoUrl(url); setVideoContext('');
+                                        setAnalysisType('single'); setMode('analysis');
+                                        setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
+                                        setAnalyzingVideo(true); setVideoAnalysis(null);
+                                        try {
+                                          const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: '' }) });
+                                          const data = await res.json();
+                                          if (data.error) return setVideoError(data.error);
+                                          setVideoAnalysis(data.analysis);
+                                          autoSaveSingle(url, data.analysis);
+                                        } catch { setVideoError('Something went wrong.'); }
+                                        finally { setAnalyzingVideo(false); }
+                                      }}
+                                      style={{ width: '100%', fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                      Analyze →
+                                    </button>
                                   </div>
-                                  <button
-                                    onClick={async () => {
-                                      // Switch to single analysis for this URL
-                                      setVideoUrl(url); setVideoContext('');
-                                      setAnalysisType('single'); setMode('analysis');
-                                      setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
-                                      setAnalyzingVideo(true); setVideoAnalysis(null);
-                                      try {
-                                        const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: '' }) });
-                                        const data = await res.json();
-                                        if (data.error) return setVideoError(data.error);
-                                        setVideoAnalysis(data.analysis);
-                                        autoSaveSingle(url, data.analysis);
-                                      } catch { setVideoError('Something went wrong. Please try again.'); }
-                                      finally { setAnalyzingVideo(false); }
-                                    }}
-                                    style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                                    Analyze →
-                                  </button>
                                 </div>
                               );
                             })}
-                          </div>
-                        </div>
 
-                        {groupResult.key_frames?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Key frames</p>
-                            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-                              {groupResult.key_frames.map((kf, i) => {
-                                const key = `${kf.video_index}:${kf.timestamp}`;
-                                const frame = groupKeyFrames[key];
-                                return (
-                                  <div key={i} className="flex flex-col gap-2">
-                                    <div className="relative rounded-lg overflow-hidden bg-gray-100" style={{ aspectRatio: '9/16' }}>
-                                      {frame ? <img src={frame} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-xs text-gray-300 font-mono">{kf.timestamp}</span></div>}
-                                      {frame && (
-                                        <div className="absolute top-1.5 right-1.5" onClick={e => e.stopPropagation()}>
-                                          <AddToShotListBtn thumbnail={frame} annotation={kf.visual} shootDirection={kf.shoot_direction} source={`Group · Video ${kf.video_index + 1} · ${kf.timestamp}`} videoUrl={groupUrls[kf.video_index]} />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <p className="text-xs font-mono text-blue-500">{kf.timestamp}</p>
-                                      <p className="text-xs text-gray-600 leading-snug mt-0.5">{kf.visual}</p>
-                                    </div>
+                            {/* Avg stats */}
+                            {(groupResult.avg_duration || groupResult.avg_cuts) && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {groupResult.avg_duration && (
+                                  <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                                    <p style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>Avg. time</p>
+                                    <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{groupResult.avg_duration}</p>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {groupResult.common_hooks?.length > 0 && (
-                          <div className="flex flex-col gap-3">
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Common hooks</p>
-                            {groupResult.common_hooks.map((h, i) => (
-                              <div key={i} className="bg-white border border-gray-200 rounded-xl p-5">
-                                <p className="text-xl font-medium text-gray-900 leading-snug mb-2">"{h.copy}"</p>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Appears in {h.appears_in} ads</span>
-                                  <p className="text-xs text-gray-500">{h.strategy}</p>
-                                </div>
+                                )}
+                                {groupResult.avg_cuts != null && (
+                                  <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                                    <p style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>Avg. cuts</p>
+                                    <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{groupResult.avg_cuts}</p>
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                            )}
                           </div>
-                        )}
 
-                        {groupResult.keyword_clusters?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Keyword clusters</p>
-                            <div className="flex flex-wrap gap-2">
-                              {groupResult.keyword_clusters.map((k, i) => (
-                                <span key={i} className={`bg-gray-100 text-gray-800 px-3 py-1 rounded-full font-medium ${k.frequency === 'high' ? 'text-base' : k.frequency === 'medium' ? 'text-sm' : 'text-xs'}`}>{k.word}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                          {/* ── RIGHT: scrollable analysis */}
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-                        {groupResult.visual_pattern && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Visual pattern</p>
-                            <div className="flex flex-col gap-2">
-                              {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].map(item => item.value ? (
-                                <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                                  <p className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{item.label}</p>
-                                  <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-                                </div>
-                              ) : null)}
-                            </div>
-                          </div>
-                        )}
-
-                        {groupResult.ad_structure_template?.length > 0 && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Typical ad structure</p>
-                            <div className="flex flex-col gap-2">
-                              {groupResult.ad_structure_template.map((s, i) => {
-                                const c = SECTION_COLORS[s.section] || { light: 'bg-gray-50', text: 'text-gray-700' };
-                                return (
-                                  <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${c.light} ${c.text}`}>{s.section}</span>
-                                    <p className="text-xs text-gray-600 leading-relaxed">{s.description}</p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {groupResult.talent_pattern && (
-                          <div className="bg-white border border-gray-200 rounded-xl p-5">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Talent pattern</p>
-                            <div className="flex flex-col gap-2">
-                              {[{ label: 'Appearance', value: groupResult.talent_pattern.appearance }, { label: 'Clothing', value: groupResult.talent_pattern.clothing }, { label: 'Setting', value: groupResult.talent_pattern.setting }, { label: 'Energy', value: groupResult.talent_pattern.energy }].map(item => item.value ? (
-                                <div key={item.label} className="flex gap-3 py-2 border-b border-gray-50 last:border-0">
-                                  <p className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{item.label}</p>
-                                  <p className="text-xs text-gray-700 leading-relaxed">{item.value}</p>
-                                </div>
-                              ) : null)}
-                            </div>
-                          </div>
-                        )}
-
-                        {groupResult.strongest_patterns?.length > 0 && (
-                          <div className="flex flex-col gap-3">
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Strongest patterns</p>
-                            {groupResult.strongest_patterns.map((p, i) => (
-                              <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 flex gap-4">
-                                <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">{i + 1}</div>
+                            {/* Keywords + Format */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                              {groupResult.keyword_clusters?.length > 0 && (
                                 <div>
-                                  <p className="text-sm font-medium text-gray-900 mb-1">{p.title}</p>
-                                  <p className="text-sm text-gray-500 leading-relaxed">{p.observation}</p>
+                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Keyword</p>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {groupResult.keyword_clusters.map((k, i) => (
+                                      <p key={i} style={{ fontSize: k.frequency === 'high' ? 20 : k.frequency === 'medium' ? 16 : 13, fontWeight: k.frequency === 'high' ? 600 : 500, color: C.text, lineHeight: 1.4 }}>{k.word}</p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {groupResult.format?.length > 0 && (
+                                <div>
+                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Format</p>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {groupResult.format.map((f, i) => (
+                                      <p key={i} style={{ fontSize: 16, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>{f}</p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Common hooks */}
+                            {groupResult.common_hooks?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Common line</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {groupResult.common_hooks.map((h, i) => (
+                                    <div key={i} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
+                                      <p style={{ fontSize: 16, fontWeight: 500, color: C.text, lineHeight: 1.4, marginBottom: 8 }}>"{h.copy}"</p>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: 10, background: C.border, color: C.textSub, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>Appears in {h.appears_in} ads</span>
+                                        <p style={{ fontSize: 11, color: C.muted }}>{h.strategy}</p>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            )}
 
-                        {groupResult.broll_logic && (
-                          <button onClick={() => setEditorBriefOpen(true)} style={{ width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
-                            onMouseLeave={e => e.currentTarget.style.background = C.accent}>
-                            Apply this editing logic to a script →
-                          </button>
-                        )}
-                      </div>
-                    )}
+                            {/* Visual trend */}
+                            {groupResult.visual_pattern && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Visual trend</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].filter(i => i.value).map((item, i, arr) => (
+                                    <div key={item.label} style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                      <p style={{ fontSize: 11, color: C.muted, width: 100, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
+                                      <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Per-video filmstrips */}
+                            {videoAnalyses.map(va => {
+                              const vidUrl = filledUrls[va.video_index];
+                              if (!vidUrl) return null;
+                              const hoveredIdx = groupHoveredFrame?.videoIdx === va.video_index ? groupHoveredFrame.frameIdx : null;
+                              const hoveredFrameData = hoveredIdx !== null ? va.frames[hoveredIdx] : null;
+                              return (
+                                <div key={va.video_index}>
+                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                                    Frame by frame analysis · Video {va.video_index + 1}
+                                  </p>
+
+                                  {/* Filmstrip */}
+                                  <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'thin' }}>
+                                    {va.frames.map((frame, fi) => {
+                                      const key = `${va.video_index}:${frame.timestamp}`;
+                                      const thumb = groupKeyFrames[key];
+                                      const isHov = hoveredIdx === fi;
+                                      const tc = TYPE_COLORS_INLINE[frame.type] || { bg: '#f3f4f6', color: '#6b7280' };
+                                      return (
+                                        <div key={fi}
+                                          onMouseEnter={() => setGroupHoveredFrame({ videoIdx: va.video_index, frameIdx: fi })}
+                                          onMouseLeave={() => setGroupHoveredFrame(null)}
+                                          style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, cursor: 'default' }}>
+                                          <div style={{
+                                            width: 90, aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#1a1c2e', position: 'relative',
+                                            outline: isHov ? `2px solid ${C.accent}` : frame.is_starred ? `2px solid #f59e0b` : '2px solid transparent',
+                                            outlineOffset: 1, transition: 'outline-color 0.1s',
+                                          }}>
+                                            {thumb
+                                              ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isHov ? 1 : 0.85, transition: 'opacity 0.1s' }} />
+                                              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                  <div style={{ width: 10, height: 10, border: `1.5px solid rgba(255,255,255,0.15)`, borderTop: `1.5px solid rgba(255,255,255,0.5)`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                                </div>}
+                                            {frame.is_starred && (
+                                              <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 13 }}>⭐</div>
+                                            )}
+                                            {thumb && (
+                                              <div style={{ position: 'absolute', bottom: 4, right: 4 }} onClick={e => {
+                                                e.stopPropagation();
+                                                if (!shotList.some(s => s.thumbnail === thumb)) addToShotList({ thumbnail: thumb, hqThumbnail: thumb, annotation: frame.visual, shootDirection: '', source: `Group V${va.video_index + 1} · ${frame.timestamp}`, videoUrl: vidUrl });
+                                              }}>
+                                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: shotList.some(s => s.thumbnail === thumb) ? 'rgba(37,99,235,0.9)' : 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: shotList.some(s => s.thumbnail === thumb) ? '#fff' : C.text, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+                                                  {shotList.some(s => s.thumbnail === thumb) ? '✓' : '+'}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                          {/* type color bar */}
+                                          <div style={{ height: 3, background: tc.color, borderRadius: '0 0 3px 3px', marginTop: 2, opacity: 0.6 }} />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Hover detail */}
+                                  <div style={{
+                                    marginTop: 8, minHeight: 56, background: C.surface, borderRadius: 10, padding: '10px 14px',
+                                    border: `1px solid ${hoveredFrameData ? (hoveredFrameData.is_starred ? '#fcd34d' : C.accentBorder) : C.border}`,
+                                    transition: 'border-color 0.15s', display: 'flex', flexDirection: 'column', gap: 5,
+                                  }}>
+                                    {hoveredFrameData ? (
+                                      <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                          <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent }}>{hoveredFrameData.timestamp}</span>
+                                          {(() => { const tc = TYPE_COLORS_INLINE[hoveredFrameData.type] || { bg: '#f3f4f6', color: '#6b7280' }; return <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: tc.bg, color: tc.color }}>{TYPE_LABELS[hoveredFrameData.type] || hoveredFrameData.type}</span>; })()}
+                                          {hoveredFrameData.is_starred && <span style={{ fontSize: 10 }}>⭐ {hoveredFrameData.why_starred}</span>}
+                                        </div>
+                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{hoveredFrameData.visual}</p>
+                                        {hoveredFrameData.copy && <p style={{ fontSize: 12, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredFrameData.copy}"</p>}
+                                      </>
+                                    ) : (
+                                      <p style={{ fontSize: 11, color: C.mutedLight }}>Hover a frame to see transcript and scene detail.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Ad structure */}
+                            {groupResult.ad_structure_template?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {groupResult.ad_structure_template.map((s, i) => {
+                                    const sc = SECTION_COLORS[s.section] || { bg: '#6b7280', light: 'bg-gray-50' };
+                                    return (
+                                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < groupResult.ad_structure_template.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                        <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: sc.bg + '18', color: sc.bg, flexShrink: 0, marginTop: 1 }}>{s.section}</span>
+                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{s.description}</p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Talent pattern */}
+                            {groupResult.talent_pattern && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Talent pattern</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {[{ label: 'Appearance', value: groupResult.talent_pattern.appearance }, { label: 'Clothing', value: groupResult.talent_pattern.clothing }, { label: 'Setting', value: groupResult.talent_pattern.setting }, { label: 'Energy', value: groupResult.talent_pattern.energy }].filter(i => i.value).map((item, i, arr) => (
+                                    <div key={item.label} style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                      <p style={{ fontSize: 11, color: C.muted, width: 80, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
+                                      <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Strongest patterns */}
+                            {groupResult.strongest_patterns?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Strongest patterns</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {groupResult.strongest_patterns.map((p, i) => (
+                                    <div key={i} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 14 }}>
+                                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.text, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{i + 1}</div>
+                                      <div>
+                                        <p style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>{p.title}</p>
+                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6 }}>{p.observation}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editor brief CTA */}
+                            {groupResult.broll_logic && (
+                              <button onClick={() => setEditorBriefOpen(true)}
+                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.12s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
+                                onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+                                Apply this editing logic to a script →
+                              </button>
+                            )}
+
+                          </div>{/* /right */}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

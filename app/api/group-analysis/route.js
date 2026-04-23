@@ -37,6 +37,11 @@ Watch all videos carefully. Identify what they have in common — patterns, repe
 Return your response as a valid JSON object with EXACTLY this structure. No markdown, no backticks, no explanation — just raw JSON:
 
 {
+  "avg_duration": "Average video duration formatted as e.g. 00:00:52",
+  "avg_cuts": 18,
+  "format": [
+    "Short format label describing the creative format used e.g. Painpoint comic picture, Before & After, Demo callout, Talking head confessional, Product unboxing"
+  ],
   "common_hooks": [
     {
       "copy": "The hook line itself, exact or close paraphrase",
@@ -74,12 +79,19 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
       "observation": "What this brand consistently does and why it likely works for their audience"
     }
   ],
-  "key_frames": [
+  "video_analyses": [
     {
       "video_index": 0,
-      "timestamp": "00:00:03",
-      "visual": "Exact description of what is on screen at this moment",
-      "shoot_direction": "Production direction for recreating this shot e.g. Position camera at waist height, talent in fitted white dress against neutral wall, natural window light from the left"
+      "frames": [
+        {
+          "timestamp": "00:00:00",
+          "type": "talking_head | talent_broll | product_broll | greenscreen",
+          "visual": "What is on screen at this moment",
+          "copy": "Exact words spoken or on-screen text at this moment. Empty string if neither.",
+          "is_starred": true,
+          "why_starred": "Why this frame is visually or strategically effective — max 12 words. null if not starred."
+        }
+      ]
     }
   ],
   "broll_logic": {
@@ -94,7 +106,7 @@ Return your response as a valid JSON object with EXACTLY this structure. No mark
   }
 }
 
-IMPORTANT for key_frames: select exactly 4-5 frames per video that are the most visually distinct and strategically important moments — the hook frame, a strong product shot, a key emotion or reaction, a text overlay moment, and the CTA or closing frame. Each must have a specific actionable shoot_direction a content producer can follow on set.`
+IMPORTANT for video_analyses: for EACH video, select exactly 6 frames that best represent its structure and strategy — always include the very first frame (00:00:00), 1-2 emotionally strong moments, the product or brand reveal, and the CTA. Mark 1-2 frames per video as is_starred: true — these should be the most visually or strategically effective frames. Provide why_starred only for starred frames (null otherwise).`
     });
 
     videoData.forEach((video, i) => {
