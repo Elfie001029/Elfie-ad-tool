@@ -349,9 +349,9 @@ export default function Home() {
   function jumpToTimestamp(ts) { if (videoRef.current) { videoRef.current.currentTime = timestampToSeconds(ts); videoRef.current.play(); } }
 
   // ── shot list helpers
-  function addToShotList({ thumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }) {
+  function addToShotList({ thumbnail, hqThumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }) {
     if (!thumbnail) return;
-    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '', videoUrl: itemVideoUrl || '' }]);
+    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, hqThumbnail: hqThumbnail || thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '', videoUrl: itemVideoUrl || '' }]);
     setShotListOpen(true);
   }
   function removeFromShotList(id) { setShotList(prev => prev.filter(i => i.id !== id)); }
@@ -367,22 +367,22 @@ export default function Home() {
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
-      const margin = 40; const gap = 16;
+      const margin = 40;
       const contentW = pageW - margin * 2;
-      const colW = (contentW - gap) / 2;
-      const thumbW = 120; const thumbH = Math.round(thumbW * 16 / 9);
-      const thumbX = (colW - thumbW) / 2;
-      const textAreaW = colW - 8;
-      const TEXT_RESERVE = 90;
-      const cardH = thumbH + TEXT_RESERVE;
+      // 1-column layout: image left, text right
+      const imgColW = 160;
+      const textColX = margin + imgColW + 20;
+      const textColW = contentW - imgColW - 20;
       let y = margin;
 
+      // Header
       doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20, 20, 20);
       doc.text('Shot List', margin, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(160, 160, 160);
       doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageW - margin, y, { align: 'right' });
       y += 28;
 
+      // Brief notes
       if (briefNotes.trim()) {
         doc.setFontSize(10); doc.setTextColor(80, 80, 80);
         const noteLines = doc.splitTextToSize(briefNotes.trim(), contentW - 24);
@@ -394,38 +394,65 @@ export default function Home() {
       }
 
       doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.5);
-      doc.line(margin, y, pageW - margin, y); y += 20;
+      doc.line(margin, y, pageW - margin, y); y += 24;
 
       for (let i = 0; i < shotList.length; i++) {
         const item = shotList[i];
-        const col = i % 2;
-        const cardX = margin + col * (colW + gap);
-        if (col === 0 && i > 0) y += cardH + 20;
-        if (col === 0 && y + cardH > pageH - margin) { doc.addPage(); y = margin; }
-        const imgX = cardX + thumbX;
-        if (item.thumbnail) { try { doc.addImage(item.thumbnail, 'JPEG', imgX, y, thumbW, thumbH); } catch {} }
-        else { doc.setFillColor(240, 240, 240); doc.roundedRect(imgX, y, thumbW, thumbH, 3, 3, 'F'); }
-        doc.setFillColor(20, 20, 20); doc.roundedRect(imgX + 5, y + 5, 18, 14, 3, 3, 'F');
+        // Use highest quality thumbnail available
+        const imgSrc = item.hqThumbnail || item.thumbnail;
+        // Derive actual aspect ratio from the image if possible, default to 9:16
+        const imgH = Math.round(imgColW * 16 / 9);
+        const cardH = Math.max(imgH, 120) + 24;
+
+        if (y + cardH > pageH - margin) { doc.addPage(); y = margin; }
+
+        // Image
+        if (imgSrc) {
+          try { doc.addImage(imgSrc, 'JPEG', margin, y, imgColW, imgH, undefined, 'FAST'); } catch {}
+        } else {
+          doc.setFillColor(240, 240, 240); doc.roundedRect(margin, y, imgColW, imgH, 3, 3, 'F');
+        }
+        // Number badge on image
+        doc.setFillColor(13, 15, 26); doc.roundedRect(margin + 6, y + 6, 20, 15, 3, 3, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), imgX + 14, y + 14, { align: 'center' });
-        let textY = y + thumbH + 10;
+        doc.text(String(i + 1), margin + 16, y + 15.5, { align: 'center' });
+
+        // Text column
+        let textY = y + 2;
+        // Source
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(160, 160, 160);
-        doc.text(item.source || '', cardX + 4, textY); textY += 13;
+        doc.text(item.source || '', textColX, textY); textY += 16;
+
+        // Annotation
         if (item.annotation) {
-          doc.setFontSize(9); doc.setTextColor(30, 30, 30);
-          const al = doc.splitTextToSize(item.annotation, textAreaW);
-          doc.text(al.slice(0, 2), cardX + 4, textY); textY += Math.min(al.length, 2) * 12 + 4;
+          doc.setFontSize(10); doc.setTextColor(20, 20, 20);
+          const al = doc.splitTextToSize(item.annotation, textColW);
+          doc.text(al, textColX, textY);
+          textY += al.length * 13 + 8;
         }
+
+        // Shoot direction
         if (item.shootDirection) {
-          doc.setFontSize(8); doc.setTextColor(37, 99, 235);
-          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textAreaW);
-          doc.text(sl.slice(0, 2), cardX + 4, textY); textY += Math.min(sl.length, 2) * 11 + 4;
+          doc.setFontSize(9); doc.setTextColor(37, 99, 235);
+          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textColW);
+          doc.text(sl, textColX, textY);
+          textY += sl.length * 12 + 8;
         }
+
+        // Source link
         if (item.videoUrl) {
           doc.setFontSize(8); doc.setTextColor(37, 99, 235);
           const ll = 'View original ad \u2197';
-          doc.text(ll, cardX + 4, textY);
-          doc.link(cardX + 4, textY - 9, doc.getTextWidth(ll), 10, { url: item.videoUrl });
+          doc.text(ll, textColX, textY);
+          doc.link(textColX, textY - 9, doc.getTextWidth(ll), 10, { url: item.videoUrl });
+        }
+
+        y += cardH + 8;
+        // Divider between cards
+        if (i < shotList.length - 1) {
+          doc.setDrawColor(235, 235, 235); doc.setLineWidth(0.5);
+          doc.line(margin, y, pageW - margin, y);
+          y += 16;
         }
       }
       doc.save('shot-list.pdf');
@@ -496,7 +523,7 @@ export default function Home() {
     return (
       <>
         {shotListOpen && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 40 }} onClick={() => setShotListOpen(false)} />}
-        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 380, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: shotListOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 520, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: shotListOpen ? 'translateX(0)' : 'translateX(100%)' }}>
           <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Shot List</p>
@@ -507,28 +534,30 @@ export default function Home() {
               <button onClick={() => setShotListOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
           </div>
-          <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Brief notes</p>
-            <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..." style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={4} />
+            <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..." style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={3} />
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {shotList.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '0 24px' }}>
                 <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
                 <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
               </div>
             ) : shotList.map((item, i) => (
-              <div key={item.id} style={{ display: 'flex', gap: 12, background: C.surface, borderRadius: 12, padding: 12 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{i + 1}</span>
-                  <div style={{ width: 48, borderRadius: 8, overflow: 'hidden', background: C.borderStrong, aspectRatio: '9/16' }}>
+              <div key={item.id} style={{ display: 'flex', gap: 16, background: C.surface, borderRadius: 14, padding: 14 }}>
+                {/* Thumbnail */}
+                <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{i + 1}</span>
+                  <div style={{ width: 110, borderRadius: 10, overflow: 'hidden', background: C.borderStrong, aspectRatio: '9/16', flexShrink: 0 }}>
                     {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <p style={{ fontSize: 11, color: C.muted }}>{item.source}</p>
-                  <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Description..." style={{ width: '100%', fontSize: 11, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
-                  <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 11, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: 8, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
+                {/* Text fields */}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{item.source}</p>
+                  <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Scene description..." style={{ width: '100%', fontSize: 12, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={3} />
+                  <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 12, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={3} />
                 </div>
                 <button onClick={() => removeFromShotList(item.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 18, cursor: 'pointer', lineHeight: 1, flexShrink: 0, marginTop: 2 }}>×</button>
               </div>
@@ -957,7 +986,16 @@ export default function Home() {
                                               {frame && (
                                                 <div
                                                   style={{ position: 'absolute', bottom: 5, right: 5 }}
-                                                  onClick={e => { e.stopPropagation(); if (!alreadyAdded) addToShotList({ thumbnail: frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl }); }}>
+                                                  onClick={async e => {
+                                                    e.stopPropagation();
+                                                    if (alreadyAdded) return;
+                                                    // Capture high-res version (540px) for PDF quality
+                                                    const vid = captureVideoRef.current;
+                                                    const nw = vid?.videoWidth || 9;
+                                                    const nh = vid?.videoHeight || 16;
+                                                    const hqThumb = vid ? await captureFrameFromVideo(vid, row.timestamp, 540, Math.round(540 * nh / nw)) : null;
+                                                    addToShotList({ thumbnail: frame, hqThumbnail: hqThumb || frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
+                                                  }}>
                                                   <div style={{
                                                     width: 22, height: 22, borderRadius: '50%',
                                                     background: alreadyAdded ? 'rgba(37,99,235,0.9)' : 'rgba(255,255,255,0.85)',
@@ -1051,7 +1089,15 @@ export default function Home() {
                                           {row.copy && <p style={{ fontSize: 12, color: C.text, fontStyle: 'italic', lineHeight: 1.5 }}>"{row.copy}"</p>}
                                         </div>
                                         {frame && (
-                                          <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={e => e.stopPropagation()}>
+                                          <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={async e => {
+                                            e.stopPropagation();
+                                            const already = shotList.some(s => s.thumbnail === frame);
+                                            if (already) return;
+                                            const vid = captureVideoRef.current;
+                                            const nw = vid?.videoWidth || 9; const nh = vid?.videoHeight || 16;
+                                            const hqThumb = vid ? await captureFrameFromVideo(vid, row.timestamp, 540, Math.round(540 * nh / nw)) : null;
+                                            addToShotList({ thumbnail: frame, hqThumbnail: hqThumb || frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
+                                          }}>
                                             <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
                                           </div>
                                         )}
@@ -1143,6 +1189,51 @@ export default function Home() {
 
                     {groupResult && (
                       <div className="flex flex-col gap-4">
+
+                        {/* ── Source videos — individual analyze buttons */}
+                        <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 20px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>Source videos</p>
+                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            {groupUrls.filter(u => u.trim()).map((url, idx) => {
+                              // Find first key frame thumbnail for this video
+                              const kf = groupResult.key_frames?.find(k => k.video_index === idx);
+                              const thumb = kf ? groupKeyFrames[`${kf.video_index}:${kf.timestamp}`] : null;
+                              const filename = url.split('/').pop()?.split('.')[0]?.slice(0, 28) || `Video ${idx + 1}`;
+                              return (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 12px 8px 8px', flex: '1 1 200px', minWidth: 0 }}>
+                                  {/* thumb */}
+                                  <div style={{ width: 36, height: 64, borderRadius: 6, overflow: 'hidden', background: '#1a1c2e', flexShrink: 0 }}>
+                                    {thumb && <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ fontSize: 11, fontWeight: 600, color: C.text, marginBottom: 2 }}>Video {idx + 1}</p>
+                                    <p style={{ fontSize: 10, color: C.muted, fontFamily: C.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{filename}</p>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      // Switch to single analysis for this URL
+                                      setVideoUrl(url); setVideoContext('');
+                                      setAnalysisType('single'); setMode('analysis');
+                                      setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
+                                      setAnalyzingVideo(true); setVideoAnalysis(null);
+                                      try {
+                                        const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: '' }) });
+                                        const data = await res.json();
+                                        if (data.error) return setVideoError(data.error);
+                                        setVideoAnalysis(data.analysis);
+                                        autoSaveSingle(url, data.analysis);
+                                      } catch { setVideoError('Something went wrong. Please try again.'); }
+                                      finally { setAnalyzingVideo(false); }
+                                    }}
+                                    style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                    Analyze →
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         {groupResult.key_frames?.length > 0 && (
                           <div className="bg-white border border-gray-200 rounded-xl p-5">
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">Key frames</p>
