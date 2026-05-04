@@ -160,6 +160,7 @@ export default function Home() {
   const [videoAnalysis, setVideoAnalysis] = useState(null);
   const [analyzingVideo, setAnalyzingVideo] = useState(false);
   const [videoError, setVideoError] = useState('');
+  const [extractingFb, setExtractingFb] = useState(false);
   const videoRef = useRef(null);
   const captureVideoRef = useRef(null);
   const [capturedFrames, setCapturedFrames] = useState({});
@@ -224,12 +225,36 @@ export default function Home() {
   }
 
   // ── main analyze handler
+  function isFbUrl(url) {
+    return /facebook\.com|fb\.watch|fb\.com/i.test(url);
+  }
+
+  async function resolveFbUrls(urlList) {
+    if (!urlList.some(isFbUrl)) return urlList;
+    setExtractingFb(true);
+    try {
+      return await Promise.all(urlList.map(async url => {
+        if (!isFbUrl(url)) return url;
+        const res = await fetch('/api/process-fb-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data.url;
+      }));
+    } finally {
+      setExtractingFb(false);
+    }
+  }
+
   async function handleAnalyze() {
     const filled = urls.filter(u => u.trim());
     if (!filled.length) return;
 
-    if (filled.length === 1) {
-      const url = filled[0];
+    let resolved;
+    try { resolved = await resolveFbUrls(filled); }
+    catch (err) { setVideoError(err.message || 'Failed to extract Facebook video'); return; }
+
+    if (resolved.length === 1) {
+      const url = resolved[0];
       setVideoUrl(url); setVideoContext(context);
       setAnalysisType('single'); setMode('analysis');
       setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
@@ -243,7 +268,7 @@ export default function Home() {
       } catch { setVideoError('Something went wrong. Please try again.'); }
       finally { setAnalyzingVideo(false); }
     } else {
-      setGroupUrls(filled); setGroupContext(context);
+      setGroupUrls(resolved); setGroupContext(context);
       setAnalysisType('group'); setMode('analysis');
       freshGroupAnalysis.current = true;
       setGroupError(''); setGroupRunning(true); setGroupResult(null); setGroupKeyFrames({});
@@ -993,11 +1018,13 @@ export default function Home() {
                     Group mode · {urls.filter(u => u.trim()).length} URLs
                   </span>
                 )}
-                <button onClick={handleAnalyze} disabled={!urls.some(u => u.trim())}
-                  style={{ width: '100%', background: urls.some(u => u.trim()) ? C.accent : C.mutedLight, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: urls.some(u => u.trim()) ? 'pointer' : 'not-allowed', transition: 'background 0.15s, transform 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                  onMouseEnter={e => { if (urls.some(u => u.trim())) e.currentTarget.style.transform = 'scale(1.01)'; }}
+                <button onClick={handleAnalyze} disabled={!urls.some(u => u.trim()) || extractingFb}
+                  style={{ width: '100%', background: urls.some(u => u.trim()) ? C.accent : C.mutedLight, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: urls.some(u => u.trim()) && !extractingFb ? 'pointer' : 'not-allowed', transition: 'background 0.15s, transform 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  onMouseEnter={e => { if (urls.some(u => u.trim()) && !extractingFb) e.currentTarget.style.transform = 'scale(1.01)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
-                  {isGroup ? `Analyze ${urls.filter(u => u.trim()).length} ads` : 'Analyze'}
+                  {extractingFb
+                    ? <><span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} /> Extracting from Facebook…</>
+                    : isGroup ? `Analyze ${urls.filter(u => u.trim()).length} ads` : 'Analyze'}
                 </button>
               </div>
             </div>
