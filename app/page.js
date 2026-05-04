@@ -443,11 +443,11 @@ export default function Home() {
       const contentW = pageW - margin * 2;
       const colGap = 14; const rowGap = 16;
       const cardW = (contentW - colGap) / 2;
-      const thumbH = 190;
+      const thumbH = 250;
       const thumbW = Math.round(thumbH * 9 / 16);
       const thumbXOff = Math.round((cardW - thumbW) / 2);
       const textPad = 8;
-      const cardH = thumbH + 18 + 120;
+      const cardH = thumbH + 100;
       const sectionHeaderH = 28;
 
       let y = margin;
@@ -487,11 +487,16 @@ export default function Home() {
         doc.setFillColor(13, 15, 26); doc.roundedRect(cardX + 6, cardY + 6, 18, 14, 3, 3, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
         doc.text(String(shotNum), cardX + 15, cardY + 15, { align: 'center' });
-        let tY = cardY + 10 + thumbH + 10;
+        let tY = cardY + 10 + thumbH + 12;
         const maxW = cardW - textPad * 2;
-        if (item.source) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(160, 160, 160); doc.text(item.source, cardX + textPad, tY, { maxWidth: maxW }); tY += 12; }
-        if (item.annotation) { doc.setFontSize(9.5); doc.setTextColor(20, 20, 20); const al = doc.splitTextToSize(item.annotation, maxW).slice(0, 4); doc.text(al, cardX + textPad, tY); tY += al.length * 12 + 4; }
-        if (item.shootDirection) { doc.setFontSize(8.5); doc.setTextColor(37, 99, 235); const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, maxW).slice(0, 3); doc.text(sl, cardX + textPad, tY); }
+        if (item.source) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(160, 160, 160); doc.text(item.source, cardX + textPad, tY, { maxWidth: maxW }); tY += 11; }
+        if (item.annotation) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20, 20, 20); const al = doc.splitTextToSize(item.annotation, maxW).slice(0, 3); doc.text(al, cardX + textPad, tY); tY += al.length * 12 + 6; }
+        if (item.videoUrl) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(37, 99, 235);
+          const urlText = item.videoUrl.length > 55 ? item.videoUrl.slice(0, 52) + '...' : item.videoUrl;
+          doc.text(urlText, cardX + textPad, tY, { maxWidth: maxW });
+          try { doc.link(cardX + textPad, tY - 7, maxW, 9, { url: item.videoUrl }); } catch {}
+        }
       }
 
       for (const group of allGroups) {
@@ -596,19 +601,36 @@ export default function Home() {
           onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverTarget(`shot-${item.id}`); }}
           onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
           onDrop={e => handleDropOnShot(e, item)}
-          style={{ display: 'flex', gap: 12, background: '#fff', borderRadius: 12, padding: 12, cursor: 'grab', border: `1.5px solid ${isDragOver ? C.accent : C.border}`, transition: 'border-color 0.1s', userSelect: 'none' }}>
-          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 20, height: 20, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{shotNum(item.id)}</span>
-            <div style={{ width: 80, borderRadius: 8, overflow: 'hidden', background: '#1a1c2e', aspectRatio: '9/16' }}>
-              {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+          style={{ display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1.5px solid ${isDragOver ? C.accent : C.border}`, transition: 'border-color 0.1s', userSelect: 'none', cursor: 'grab' }}>
+          {/* Thumbnail — full width, takes most of the card */}
+          <div style={{ position: 'relative', aspectRatio: '9/16', background: '#1a1c2e', flexShrink: 0 }}>
+            {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+            <div style={{ position: 'absolute', top: 6, left: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(13,15,26,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{shotNum(item.id)}</span>
             </div>
+            <button onClick={e => { e.stopPropagation(); removeFromShotList(item.id); }}
+              style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(13,15,26,0.6)', border: 'none', color: '#fff', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <p style={{ fontSize: 10, color: C.muted, lineHeight: 1.4 }}>{item.source}</p>
-            <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Scene description..." style={{ width: '100%', fontSize: 12, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={2} />
-            <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 12, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={2} />
+          {/* Note + URL */}
+          <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <textarea
+              value={item.annotation}
+              onChange={e => updateShotListItem(item.id, 'annotation', e.target.value.slice(0, 200))}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+              placeholder="Add a note…"
+              maxLength={200}
+              rows={2}
+              style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 9px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, overflow: 'hidden' }} />
+            {item.videoUrl && (
+              <a href={item.videoUrl} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{ fontSize: 10, color: C.accent, wordBreak: 'break-all', lineHeight: 1.4, textDecoration: 'none' }}
+                onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>
+                {item.videoUrl}
+              </a>
+            )}
           </div>
-          <button onClick={() => removeFromShotList(item.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 18, cursor: 'pointer', lineHeight: 1, flexShrink: 0, marginTop: 2 }}>×</button>
         </div>
       );
     }
@@ -616,7 +638,7 @@ export default function Home() {
     function renderShotsGrid(shots) {
       return isExpanded
         ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>{shots.map(renderShotCard)}</div>
-        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{shots.map(renderShotCard)}</div>;
+        : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>{shots.map(renderShotCard)}</div>;
     }
 
     const containerStyle = isExpanded
