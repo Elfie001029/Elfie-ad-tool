@@ -1370,23 +1370,23 @@ export default function Home() {
                                 <div key={idx}
                                   style={{ borderRadius: 10, overflow: 'hidden', background: '#0d0f1a', border: `2px solid ${isSelected ? C.accent : C.border}`, cursor: 'pointer', transition: 'border-color 0.15s' }}
                                   onClick={() => setGroupSelectedVideoIdx(isSelected ? null : idx)}>
-                                  {/* thumbnail */}
+                                  {/* thumbnail / inline player */}
                                   <div style={{ position: 'relative', aspectRatio: '9/16' }}>
-                                    {thumb
-                                      ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                          <div style={{ width: 18, height: 18, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 8, paddingLeft: 2 }}>▶</span>
+                                    {isSelected
+                                      ? <video src={url} controls autoPlay onClick={e => e.stopPropagation()}
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }} />
+                                      : thumb
+                                        ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                        : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <div style={{ width: 18, height: 18, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 8, paddingLeft: 2 }}>▶</span>
+                                            </div>
                                           </div>
-                                        </div>}
-                                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.6)', borderRadius: 5, padding: '2px 6px' }}>
+                                    }
+                                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.6)', borderRadius: 5, padding: '2px 6px', pointerEvents: 'none' }}>
                                       <span style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>Video {idx + 1}</span>
                                     </div>
                                   </div>
-                                  {/* inline video player — shown when selected */}
-                                  {isSelected && (
-                                    <video src={url} controls autoPlay style={{ width: '100%', display: 'block', background: '#000' }} onClick={e => e.stopPropagation()} />
-                                  )}
                                   {/* analyze individually */}
                                   <div style={{ padding: '8px 10px', background: '#fff', borderTop: `1px solid ${C.border}` }}>
                                     <button
