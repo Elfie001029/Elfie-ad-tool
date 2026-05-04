@@ -141,8 +141,15 @@ export default function Home() {
   // ── shot list
   const [shotList, setShotList] = useState([]);
   const [shotListOpen, setShotListOpen] = useState(false);
+  const [shotListExpanded, setShotListExpanded] = useState(false);
   const [briefNotes, setBriefNotes] = useState('');
+  const [pdfTitle, setPdfTitle] = useState('Shot List');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [sections, setSections] = useState([]);
+  const [editingSectionId, setEditingSectionId] = useState(null);
+  const [dragOverTarget, setDragOverTarget] = useState(null);
+  const dragData = useRef(null);
 
   // ── library
   const [library, setLibrary] = useState([]);
@@ -365,12 +372,63 @@ export default function Home() {
   // ── shot list helpers
   function addToShotList({ thumbnail, hqThumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }) {
     if (!thumbnail) return;
-    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, hqThumbnail: hqThumbnail || thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '', videoUrl: itemVideoUrl || '' }]);
+    setShotList(prev => [...prev, { id: Date.now().toString() + Math.random(), thumbnail, hqThumbnail: hqThumbnail || thumbnail, annotation: annotation || '', shootDirection: shootDirection || '', source: source || '', videoUrl: itemVideoUrl || '', sectionId: null }]);
     setShotListOpen(true);
   }
   function removeFromShotList(id) { setShotList(prev => prev.filter(i => i.id !== id)); }
   function updateShotListItem(id, field, value) {
     setShotList(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+  }
+
+  // ── section helpers
+  function addSection() {
+    const id = Date.now().toString() + Math.random();
+    setSections(prev => [...prev, { id, name: 'New category' }]);
+    setEditingSectionId(id);
+  }
+  function updateSectionName(id, name) { setSections(prev => prev.map(s => s.id === id ? { ...s, name } : s)); }
+  function deleteSection(id) {
+    setSections(prev => prev.filter(s => s.id !== id));
+    setShotList(prev => prev.map(sh => sh.sectionId === id ? { ...sh, sectionId: null } : sh));
+  }
+
+  // ── drag and drop handlers
+  function handleDragStartShot(shotId) { dragData.current = { type: 'shot', id: shotId }; }
+  function handleDragStartSection(sectionId) { dragData.current = { type: 'section', id: sectionId }; }
+  function handleDropOnSection(e, targetSectionId) {
+    e.preventDefault(); e.stopPropagation();
+    const d = dragData.current; if (!d) { setDragOverTarget(null); return; }
+    if (d.type === 'shot') {
+      setShotList(prev => prev.map(s => s.id === d.id ? { ...s, sectionId: targetSectionId } : s));
+    } else if (d.type === 'section' && d.id !== targetSectionId) {
+      setSections(prev => {
+        const arr = [...prev];
+        const fi = arr.findIndex(s => s.id === d.id); const ti = arr.findIndex(s => s.id === targetSectionId);
+        if (fi === -1 || ti === -1) return prev;
+        const [item] = arr.splice(fi, 1); arr.splice(ti, 0, item); return arr;
+      });
+    }
+    setDragOverTarget(null); dragData.current = null;
+  }
+  function handleDropOnUnsorted(e) {
+    e.preventDefault();
+    const d = dragData.current; if (!d || d.type !== 'shot') { setDragOverTarget(null); return; }
+    setShotList(prev => prev.map(s => s.id === d.id ? { ...s, sectionId: null } : s));
+    setDragOverTarget(null); dragData.current = null;
+  }
+  function handleDropOnShot(e, targetShot) {
+    e.preventDefault(); e.stopPropagation();
+    const d = dragData.current; if (!d || d.type !== 'shot' || d.id === targetShot.id) { setDragOverTarget(null); return; }
+    setShotList(prev => {
+      const arr = [...prev];
+      const fi = arr.findIndex(s => s.id === d.id);
+      const dragged = { ...arr[fi], sectionId: targetShot.sectionId ?? null };
+      arr.splice(fi, 1);
+      const ti = arr.findIndex(s => s.id === targetShot.id);
+      arr.splice(ti, 0, dragged);
+      return arr;
+    });
+    setDragOverTarget(null); dragData.current = null;
   }
 
   // ── PDF download
@@ -379,30 +437,26 @@ export default function Home() {
     try {
       const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();   // 595
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
       const margin = 28;
-      const contentW = pageW - margin * 2; // 539
-
-      // Grid constants
-      const cols = 2;
-      const colGap = 14;
-      const rowGap = 14;
-      const cardW = (contentW - colGap * (cols - 1)) / cols; // ~262.5
-      const thumbH = 200;
-      const thumbW = Math.round(thumbH * 9 / 16);            // ~112
-      const thumbXOffset = Math.round((cardW - thumbW) / 2); // center horizontally
+      const contentW = pageW - margin * 2;
+      const colGap = 14; const rowGap = 16;
+      const cardW = (contentW - colGap) / 2;
+      const thumbH = 190;
+      const thumbW = Math.round(thumbH * 9 / 16);
+      const thumbXOff = Math.round((cardW - thumbW) / 2);
       const textPad = 8;
-      const cardH = thumbH + textPad + 120; // image + gap + text area
+      const cardH = thumbH + 18 + 120;
+      const sectionHeaderH = 28;
 
-      // \u2500\u2500 Header
       let y = margin;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20, 20, 20);
-      doc.text('Shot List', margin, y);
+      doc.text(pdfTitle || 'Shot List', margin, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(160, 160, 160);
       doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pageW - margin, y, { align: 'right' });
       y += 28;
 
-      // Brief notes
       if (briefNotes.trim()) {
         doc.setFontSize(10); doc.setTextColor(80, 80, 80);
         const noteLines = doc.splitTextToSize(briefNotes.trim(), contentW - 24);
@@ -414,72 +468,52 @@ export default function Home() {
       }
 
       doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.5);
-      doc.line(margin, y, pageW - margin, y); y += 18;
+      doc.line(margin, y, pageW - margin, y); y += 16;
 
-      // \u2500\u2500 Grid: 4 cards per page (2\u00d72)
-      for (let i = 0; i < shotList.length; i++) {
-        const col = i % cols;
-        const rowInPage = Math.floor((i % 4) / cols);
-        if (i > 0 && i % 4 === 0) { doc.addPage(); y = margin; }
+      const allGroups = [
+        ...sections.map(s => ({ name: s.name, shots: shotList.filter(sh => sh.sectionId === s.id) })).filter(g => g.shots.length),
+        { name: null, shots: shotList.filter(sh => !sh.sectionId || !sections.find(s => s.id === sh.sectionId)) },
+      ].filter(g => g.shots.length);
 
-        const cardX = margin + col * (cardW + colGap);
-        const cardY = y + rowInPage * (cardH + rowGap);
+      let globalShotIdx = 0;
 
-        const item = shotList[i];
+      function renderCard(item, shotNum, cardX, cardY) {
         const imgSrc = item.hqThumbnail || item.thumbnail;
-
-        // Card background
         doc.setFillColor(248, 249, 251); doc.setDrawColor(226, 228, 236); doc.setLineWidth(0.5);
         doc.roundedRect(cardX, cardY, cardW, cardH, 6, 6, 'FD');
-
-        // Image (centered horizontally, top of card)
-        const imgX = cardX + thumbXOffset;
-        const imgY = cardY + 10;
-        if (imgSrc) {
-          try { doc.addImage(imgSrc, 'JPEG', imgX, imgY, thumbW, thumbH, undefined, 'NONE'); } catch {}
-        } else {
-          doc.setFillColor(220, 222, 230); doc.roundedRect(imgX, imgY, thumbW, thumbH, 3, 3, 'F');
-        }
-
-        // Number badge
-        doc.setFillColor(13, 15, 26); doc.roundedRect(cardX + 7, cardY + 7, 18, 14, 3, 3, 'F');
+        const imgX = cardX + thumbXOff; const imgY2 = cardY + 10;
+        if (imgSrc) { try { doc.addImage(imgSrc, 'JPEG', imgX, imgY2, thumbW, thumbH, undefined, 'NONE'); } catch {} }
+        else { doc.setFillColor(220, 222, 230); doc.roundedRect(imgX, imgY2, thumbW, thumbH, 3, 3, 'F'); }
+        doc.setFillColor(13, 15, 26); doc.roundedRect(cardX + 6, cardY + 6, 18, 14, 3, 3, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), cardX + 16, cardY + 16.5, { align: 'center' });
-
-        // Text below image
-        let textY = cardY + 10 + thumbH + 10;
-        const textMaxW = cardW - textPad * 2;
-
-        // Source label
-        if (item.source) {
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(160, 160, 160);
-          doc.text(item.source, cardX + textPad, textY, { maxWidth: textMaxW }); textY += 12;
-        }
-
-        // Annotation
-        if (item.annotation) {
-          doc.setFontSize(9.5); doc.setTextColor(20, 20, 20);
-          const al = doc.splitTextToSize(item.annotation, textMaxW);
-          const visible = al.slice(0, 4); // max 4 lines
-          doc.text(visible, cardX + textPad, textY);
-          textY += visible.length * 12 + 5;
-        }
-
-        // Shoot direction
-        if (item.shootDirection) {
-          doc.setFontSize(8.5); doc.setTextColor(37, 99, 235);
-          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textMaxW);
-          const visible = sl.slice(0, 3);
-          doc.text(visible, cardX + textPad, textY);
-        }
-
-        // After filling 2 rows (4 cards), bump y for next page start
-        if ((i + 1) % 4 === 0 && i + 1 < shotList.length) {
-          y = margin; // reset for addPage() at top of loop
-        }
+        doc.text(String(shotNum), cardX + 15, cardY + 15, { align: 'center' });
+        let tY = cardY + 10 + thumbH + 10;
+        const maxW = cardW - textPad * 2;
+        if (item.source) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(160, 160, 160); doc.text(item.source, cardX + textPad, tY, { maxWidth: maxW }); tY += 12; }
+        if (item.annotation) { doc.setFontSize(9.5); doc.setTextColor(20, 20, 20); const al = doc.splitTextToSize(item.annotation, maxW).slice(0, 4); doc.text(al, cardX + textPad, tY); tY += al.length * 12 + 4; }
+        if (item.shootDirection) { doc.setFontSize(8.5); doc.setTextColor(37, 99, 235); const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, maxW).slice(0, 3); doc.text(sl, cardX + textPad, tY); }
       }
 
-      doc.save('shot-list.pdf');
+      for (const group of allGroups) {
+        if (group.name) {
+          if (y + sectionHeaderH > pageH - margin) { doc.addPage(); y = margin; }
+          doc.setFillColor(240, 241, 246); doc.setDrawColor(220, 222, 230); doc.setLineWidth(0.5);
+          doc.roundedRect(margin, y, contentW, sectionHeaderH - 4, 4, 4, 'FD');
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(30, 30, 40);
+          doc.text(group.name.toUpperCase(), margin + 12, y + 17);
+          y += sectionHeaderH + 6;
+        }
+        for (let i = 0; i < group.shots.length; i += 2) {
+          if (y + cardH > pageH - margin) { doc.addPage(); y = margin; }
+          renderCard(group.shots[i], ++globalShotIdx, margin, y);
+          if (group.shots[i + 1]) renderCard(group.shots[i + 1], ++globalShotIdx, margin + cardW + colGap, y);
+          y += cardH + rowGap;
+        }
+        y += 8;
+      }
+
+      const filename = (pdfTitle || 'shot-list').replace(/[^a-z0-9]/gi, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '');
+      doc.save(`${filename}.pdf`);
     } finally { setPdfDownloading(false); }
   }
 
@@ -544,51 +578,164 @@ export default function Home() {
   }
 
   function ShotListSidebar() {
+    const isExpanded = shotListExpanded;
+    const unsortedShots = shotList.filter(sh => !sh.sectionId || !sections.find(s => s.id === sh.sectionId));
+    // Global shot order for badge numbers: sections first, unsorted last
+    const orderedForBadge = [
+      ...sections.flatMap(s => shotList.filter(sh => sh.sectionId === s.id)),
+      ...unsortedShots,
+    ];
+    const shotNum = (id) => orderedForBadge.findIndex(s => s.id === id) + 1;
+
+    function renderShotCard(item) {
+      const isDragOver = dragOverTarget === `shot-${item.id}`;
+      return (
+        <div key={item.id}
+          draggable
+          onDragStart={e => { e.stopPropagation(); handleDragStartShot(item.id); }}
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverTarget(`shot-${item.id}`); }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+          onDrop={e => handleDropOnShot(e, item)}
+          style={{ display: 'flex', gap: 12, background: '#fff', borderRadius: 12, padding: 12, cursor: 'grab', border: `1.5px solid ${isDragOver ? C.accent : C.border}`, transition: 'border-color 0.1s', userSelect: 'none' }}>
+          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 20, height: 20, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{shotNum(item.id)}</span>
+            <div style={{ width: 80, borderRadius: 8, overflow: 'hidden', background: '#1a1c2e', aspectRatio: '9/16' }}>
+              {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <p style={{ fontSize: 10, color: C.muted, lineHeight: 1.4 }}>{item.source}</p>
+            <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Scene description..." style={{ width: '100%', fontSize: 12, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={2} />
+            <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 12, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={2} />
+          </div>
+          <button onClick={() => removeFromShotList(item.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 18, cursor: 'pointer', lineHeight: 1, flexShrink: 0, marginTop: 2 }}>×</button>
+        </div>
+      );
+    }
+
+    function renderShotsGrid(shots) {
+      return isExpanded
+        ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>{shots.map(renderShotCard)}</div>
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{shots.map(renderShotCard)}</div>;
+    }
+
+    const containerStyle = isExpanded
+      ? { position: 'fixed', inset: 0, zIndex: 60, background: '#f8f9fb', display: 'flex', flexDirection: 'column' }
+      : { position: 'fixed', top: 0, right: 0, height: '100%', width: 520, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: shotListOpen ? 'translateX(0)' : 'translateX(100%)' };
+
     return (
       <>
-        {shotListOpen && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 40 }} onClick={() => setShotListOpen(false)} />}
-        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 520, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: shotListOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Shot List</p>
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'} selected</p>
+        {shotListOpen && !isExpanded && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 40 }} onClick={() => setShotListOpen(false)} />}
+        <div style={containerStyle}>
+
+          {/* Header */}
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, background: '#fff' }}>
+            {isExpanded && (
+              <button onClick={() => setShotListExpanded(false)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.textSub, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', flexShrink: 0 }}>← Back</button>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {isEditingTitle
+                ? <input autoFocus value={pdfTitle} onChange={e => setPdfTitle(e.target.value)}
+                    onBlur={() => setIsEditingTitle(false)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setIsEditingTitle(false); }}
+                    style={{ fontSize: 14, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit' }} />
+                : <p onClick={() => setIsEditingTitle(true)} title="Click to rename" style={{ fontSize: 14, fontWeight: 700, color: C.text, cursor: 'text', display: 'inline-block' }}>{pdfTitle}</p>
+              }
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'}</p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {!isExpanded && (
+                <button onClick={() => { setShotListExpanded(true); setShotListOpen(false); }} title="Full screen"
+                  style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted, fontSize: 14 }}>⤢</button>
+              )}
               {shotList.length > 0 && <button onClick={() => setShotList([])} style={{ fontSize: 12, color: C.muted, background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>}
-              <button onClick={() => setShotListOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+              {!isExpanded && <button onClick={() => setShotListOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>}
             </div>
           </div>
-          <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Brief notes</p>
-            <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..." style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={3} />
+
+          {/* Brief notes */}
+          <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: '#fff' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Brief notes</p>
+            <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..."
+              style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {shotList.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '0 24px' }}>
-                <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
-                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
-              </div>
-            ) : shotList.map((item, i) => (
-              <div key={item.id} style={{ display: 'flex', gap: 16, background: C.surface, borderRadius: 14, padding: 14 }}>
-                {/* Thumbnail */}
-                <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: C.text, color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{i + 1}</span>
-                  <div style={{ width: 110, borderRadius: 10, overflow: 'hidden', background: C.borderStrong, aspectRatio: '9/16', flexShrink: 0 }}>
-                    {item.thumbnail && <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+
+          {/* Scrollable content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: isExpanded ? '20px 32px' : '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Add category */}
+            <div>
+              <button onClick={addSection}
+                style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                + Add category
+              </button>
+            </div>
+
+            {shotList.length === 0
+              ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, textAlign: 'center', padding: '0 24px' }}>
+                  <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                  <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
+                </div>
+              : <>
+                  {/* Named sections */}
+                  {sections.map(section => {
+                    const sectionShots = shotList.filter(sh => sh.sectionId === section.id);
+                    const isDragOver = dragOverTarget === `section-${section.id}`;
+                    return (
+                      <div key={section.id}
+                        onDragOver={e => { e.preventDefault(); setDragOverTarget(`section-${section.id}`); }}
+                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                        onDrop={e => handleDropOnSection(e, section.id)}
+                        style={{ display: 'flex', flexDirection: 'column', gap: 8, border: `1.5px dashed ${isDragOver ? C.accent : C.border}`, borderRadius: 14, padding: 14, background: isDragOver ? C.accentLight : 'transparent', transition: 'border-color 0.1s, background 0.1s' }}>
+                        {/* Section header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab' }}
+                          draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }}>
+                          <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, lineHeight: 1 }}>⠿</span>
+                          <div style={{ flex: 1 }}>
+                            {editingSectionId === section.id
+                              ? <input autoFocus value={section.name}
+                                  onChange={e => updateSectionName(section.id, e.target.value)}
+                                  onBlur={() => setEditingSectionId(null)}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }}
+                                  style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                              : <span onClick={() => setEditingSectionId(section.id)} style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
+                                  {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
+                                </span>
+                            }
+                          </div>
+                          <button onClick={() => deleteSection(section.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 16, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                        </div>
+                        {renderShotsGrid(sectionShots)}
+                        {sectionShots.length === 0 && (
+                          <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>Drop shots here</p>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Unsorted shots */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDragOverTarget('unsorted'); }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                    onDrop={handleDropOnUnsorted}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 8, ...(sections.length > 0 ? { border: `1.5px dashed ${dragOverTarget === 'unsorted' ? C.accent : C.border}`, borderRadius: 14, padding: 14, background: dragOverTarget === 'unsorted' ? C.accentLight : 'transparent', transition: 'border-color 0.1s, background 0.1s' } : {}) }}>
+                    {sections.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1, height: 1, background: C.border }} />
+                        <span style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>Unsorted</span>
+                        <div style={{ flex: 1, height: 1, background: C.border }} />
+                      </div>
+                    )}
+                    {renderShotsGrid(unsortedShots)}
                   </div>
-                </div>
-                {/* Text fields */}
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{item.source}</p>
-                  <textarea value={item.annotation} onChange={e => updateShotListItem(item.id, 'annotation', e.target.value)} placeholder="Scene description..." style={{ width: '100%', fontSize: 12, color: C.text, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={3} />
-                  <textarea value={item.shootDirection} onChange={e => updateShotListItem(item.id, 'shootDirection', e.target.value)} placeholder="How to shoot this scene..." style={{ width: '100%', fontSize: 12, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} rows={3} />
-                </div>
-                <button onClick={() => removeFromShotList(item.id)} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 18, cursor: 'pointer', lineHeight: 1, flexShrink: 0, marginTop: 2 }}>×</button>
-              </div>
-            ))}
+                </>
+            }
           </div>
-          <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <button onClick={downloadPDF} disabled={pdfDownloading || shotList.length === 0} style={{ width: '100%', background: pdfDownloading || shotList.length === 0 ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: pdfDownloading || shotList.length === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
+
+          {/* Footer */}
+          <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#fff' }}>
+            <button onClick={downloadPDF} disabled={pdfDownloading || shotList.length === 0}
+              style={{ width: '100%', background: pdfDownloading || shotList.length === 0 ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: pdfDownloading || shotList.length === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
               {pdfDownloading ? 'Generating PDF...' : 'Download PDF'}
             </button>
           </div>
