@@ -133,7 +133,7 @@ export default function Home() {
   });
 
   // ── home form
-  const [urls, setUrls] = useState(['']);
+  const [urls, setUrls] = useState(['', '']);
   const [context, setContext] = useState('');
   const [analysisType, setAnalysisType] = useState('single'); // 'single' | 'group'
   const freshGroupAnalysis = useRef(false);
@@ -217,7 +217,7 @@ export default function Home() {
   // ── navigation
   function goHome() {
     setMode('home');
-    setUrls(['']); setContext('');
+    setUrls(['', '']); setContext('');
     setVideoAnalysis(null); setGroupResult(null);
     setVideoError(''); setGroupError('');
     setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({}); setGroupFirstFrames({}); setGroupSelectedVideoIdx(null); setGroupHoveredFrame(null);
@@ -886,12 +886,12 @@ export default function Home() {
                         <p style={{ fontSize: 10, color: C.muted, marginTop: 3, fontFamily: C.mono }}>{formatDate(entry.savedAt)}</p>
                       </div>
                     </button>
-                    <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(13,15,26,0.55)', borderRadius: 10, opacity: 0, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <div className="card-overlay" style={{ position: 'absolute', top: 5, right: 5, opacity: 0, transition: 'opacity 0.15s', pointerEvents: 'none' }}>
                       <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id); }}
-                        style={{ pointerEvents: 'auto', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}>
-                        Delete
+                        style={{ pointerEvents: 'auto', width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, lineHeight: 1, cursor: 'pointer', backdropFilter: 'blur(2px)' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.8)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}>
+                        ×
                       </button>
                     </div>
                   </div>
@@ -926,7 +926,7 @@ export default function Home() {
 
             <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {urls.map((url, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', animation: 'fadeUp 0.2s ease' }}>
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', animation: i > 1 ? 'fadeUp 0.2s ease' : undefined }}>
                   {isGroup && (
                     <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0 }}>{i + 1}</div>
                   )}
@@ -939,25 +939,14 @@ export default function Home() {
                       onFocus={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('focus', { bubbles: true }))}
                       onBlur={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('blur', { bubbles: true }))}
                       onKeyDown={e => { if (e.key === 'Enter' && i === urls.length - 1 && urls.some(u => u.trim())) handleAnalyze(); }}
-                      placeholder={i === 0 ? 'Paste a .mp4 URL from swipekit.app or foreplay.co…' : `Video URL ${i + 1}…`}
+                      placeholder={i === 0 ? 'Paste a .mp4 URL from swipekit.app or foreplay.co…' : i === 1 ? 'Add another ad to compare… (optional)' : `Video URL ${i + 1}…`}
                       style={{ flex: 1, fontSize: 13, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: C.mono }} />
                   </div>
-                  {urls.length > 1 && (
+                  {i >= 2 && (
                     <button onClick={() => setUrls(urls.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
                   )}
                 </div>
               ))}
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '11px 16px', transition: 'border-color 0.15s, box-shadow 0.15s' }}
-                onFocus={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.boxShadow = `0 0 0 3px ${C.accentBorder}`; }}
-                onBlur={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
-                <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 500 }}>Context</span>
-                <input value={context} onChange={e => setContext(e.target.value)}
-                  onFocus={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('focus', { bubbles: true }))}
-                  onBlur={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('blur', { bubbles: true }))}
-                  placeholder="Brand context, target audience… (optional)"
-                  style={{ flex: 1, fontSize: 13, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }} />
-              </div>
 
               {urls.length < 6 && (
                 <button onClick={() => setUrls([...urls, ''])}
@@ -965,9 +954,16 @@ export default function Home() {
                   onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = C.accentLight; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; e.currentTarget.style.background = 'transparent'; }}>
                   <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
-                  <span>{isGroup ? 'Add another ad' : 'Compare with another ad'}</span>
+                  <span>Add another ad</span>
                 </button>
               )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px 0', opacity: 0.7 }}>
+                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, fontWeight: 500 }}>Context</span>
+                <input value={context} onChange={e => setContext(e.target.value)}
+                  placeholder="Brand context, target audience… (optional)"
+                  style={{ flex: 1, fontSize: 12, color: C.textSub, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }} />
+              </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 2 }}>
                 {isGroup && (
