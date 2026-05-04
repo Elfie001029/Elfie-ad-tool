@@ -252,18 +252,10 @@ export default function Home() {
 
   // ── auto-save
   async function autoSaveSingle(url, analysis) {
-    const video = captureVideoRef.current;
-    let thumbnail = null;
-    if (video) {
-      try {
-        const nw = videoNaturalSize?.w || 9; const nh = videoNaturalSize?.h || 16;
-        thumbnail = await captureFrameFromVideo(video, '00:00:00', 200, Math.round(200 * nh / nw));
-      } catch {}
-    }
     const entry = {
       id: Date.now().toString(), type: 'single',
       urls: [url], analysis, groupResult: null,
-      savedAt: new Date().toISOString(), thumbnail,
+      savedAt: new Date().toISOString(), thumbnail: null,
       hook: analysis?.general?.hook?.copy || '',
     };
     const updated = [entry, ...getLibrary()];
@@ -333,13 +325,25 @@ export default function Home() {
     setCapturingFrames(true); setCapturedFrames({});
     const nw = video.videoWidth || videoNaturalSize?.w || 9;
     const nh = video.videoHeight || videoNaturalSize?.h || 16;
-    const w = 160; const h = Math.round(w * nh / nw);
+    const w = 1080; const h = Math.round(w * nh / nw);
     const frames = {};
     for (const row of videoAnalysis.timeline) {
       frames[row.timestamp] = await captureFrameFromVideo(video, row.timestamp, w, h);
       setCapturedFrames({ ...frames });
     }
     setCapturingFrames(false);
+
+    // Backfill library thumbnail for this entry once frames are ready
+    const firstFrame = frames[videoAnalysis.timeline[0]?.timestamp];
+    if (firstFrame && videoUrl) {
+      const lib = getLibrary();
+      const idx = lib.findIndex(e => (e.urls?.[0] === videoUrl || e.url === videoUrl) && !e.thumbnail);
+      if (idx !== -1) {
+        lib[idx] = { ...lib[idx], thumbnail: firstFrame };
+        persistLibrary(lib);
+        setLibrary([...lib]);
+      }
+    }
   }
 
   // ── library
@@ -375,17 +379,23 @@ export default function Home() {
     try {
       const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const margin = 40;
-      const contentW = pageW - margin * 2;
-      // 1-column layout: image left, text right
-      const imgColW = 160;
-      const textColX = margin + imgColW + 20;
-      const textColW = contentW - imgColW - 20;
-      let y = margin;
+      const pageW = doc.internal.pageSize.getWidth();   // 595
+      const margin = 28;
+      const contentW = pageW - margin * 2; // 539
 
-      // Header
+      // Grid constants
+      const cols = 2;
+      const colGap = 14;
+      const rowGap = 14;
+      const cardW = (contentW - colGap * (cols - 1)) / cols; // ~262.5
+      const thumbH = 200;
+      const thumbW = Math.round(thumbH * 9 / 16);            // ~112
+      const thumbXOffset = Math.round((cardW - thumbW) / 2); // center horizontally
+      const textPad = 8;
+      const cardH = thumbH + textPad + 120; // image + gap + text area
+
+      // \u2500\u2500 Header
+      let y = margin;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(20, 20, 20);
       doc.text('Shot List', margin, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(160, 160, 160);
@@ -404,67 +414,71 @@ export default function Home() {
       }
 
       doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.5);
-      doc.line(margin, y, pageW - margin, y); y += 24;
+      doc.line(margin, y, pageW - margin, y); y += 18;
 
+      // \u2500\u2500 Grid: 4 cards per page (2\u00d72)
       for (let i = 0; i < shotList.length; i++) {
+        const col = i % cols;
+        const rowInPage = Math.floor((i % 4) / cols);
+        if (i > 0 && i % 4 === 0) { doc.addPage(); y = margin; }
+
+        const cardX = margin + col * (cardW + colGap);
+        const cardY = y + rowInPage * (cardH + rowGap);
+
         const item = shotList[i];
-        // Use highest quality thumbnail available
         const imgSrc = item.hqThumbnail || item.thumbnail;
-        // Derive actual aspect ratio from the image if possible, default to 9:16
-        const imgH = Math.round(imgColW * 16 / 9);
-        const cardH = Math.max(imgH, 120) + 24;
 
-        if (y + cardH > pageH - margin) { doc.addPage(); y = margin; }
+        // Card background
+        doc.setFillColor(248, 249, 251); doc.setDrawColor(226, 228, 236); doc.setLineWidth(0.5);
+        doc.roundedRect(cardX, cardY, cardW, cardH, 6, 6, 'FD');
 
-        // Image
+        // Image (centered horizontally, top of card)
+        const imgX = cardX + thumbXOffset;
+        const imgY = cardY + 10;
         if (imgSrc) {
-          try { doc.addImage(imgSrc, 'JPEG', margin, y, imgColW, imgH, undefined, 'FAST'); } catch {}
+          try { doc.addImage(imgSrc, 'JPEG', imgX, imgY, thumbW, thumbH, undefined, 'NONE'); } catch {}
         } else {
-          doc.setFillColor(240, 240, 240); doc.roundedRect(margin, y, imgColW, imgH, 3, 3, 'F');
+          doc.setFillColor(220, 222, 230); doc.roundedRect(imgX, imgY, thumbW, thumbH, 3, 3, 'F');
         }
-        // Number badge on image
-        doc.setFillColor(13, 15, 26); doc.roundedRect(margin + 6, y + 6, 20, 15, 3, 3, 'F');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
-        doc.text(String(i + 1), margin + 16, y + 15.5, { align: 'center' });
 
-        // Text column
-        let textY = y + 2;
-        // Source
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(160, 160, 160);
-        doc.text(item.source || '', textColX, textY); textY += 16;
+        // Number badge
+        doc.setFillColor(13, 15, 26); doc.roundedRect(cardX + 7, cardY + 7, 18, 14, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+        doc.text(String(i + 1), cardX + 16, cardY + 16.5, { align: 'center' });
+
+        // Text below image
+        let textY = cardY + 10 + thumbH + 10;
+        const textMaxW = cardW - textPad * 2;
+
+        // Source label
+        if (item.source) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(160, 160, 160);
+          doc.text(item.source, cardX + textPad, textY, { maxWidth: textMaxW }); textY += 12;
+        }
 
         // Annotation
         if (item.annotation) {
-          doc.setFontSize(10); doc.setTextColor(20, 20, 20);
-          const al = doc.splitTextToSize(item.annotation, textColW);
-          doc.text(al, textColX, textY);
-          textY += al.length * 13 + 8;
+          doc.setFontSize(9.5); doc.setTextColor(20, 20, 20);
+          const al = doc.splitTextToSize(item.annotation, textMaxW);
+          const visible = al.slice(0, 4); // max 4 lines
+          doc.text(visible, cardX + textPad, textY);
+          textY += visible.length * 12 + 5;
         }
 
         // Shoot direction
         if (item.shootDirection) {
-          doc.setFontSize(9); doc.setTextColor(37, 99, 235);
-          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textColW);
-          doc.text(sl, textColX, textY);
-          textY += sl.length * 12 + 8;
+          doc.setFontSize(8.5); doc.setTextColor(37, 99, 235);
+          const sl = doc.splitTextToSize('\u2192 ' + item.shootDirection, textMaxW);
+          const visible = sl.slice(0, 3);
+          doc.text(visible, cardX + textPad, textY);
         }
 
-        // Source link
-        if (item.videoUrl) {
-          doc.setFontSize(8); doc.setTextColor(37, 99, 235);
-          const ll = 'View original ad \u2197';
-          doc.text(ll, textColX, textY);
-          doc.link(textColX, textY - 9, doc.getTextWidth(ll), 10, { url: item.videoUrl });
-        }
-
-        y += cardH + 8;
-        // Divider between cards
-        if (i < shotList.length - 1) {
-          doc.setDrawColor(235, 235, 235); doc.setLineWidth(0.5);
-          doc.line(margin, y, pageW - margin, y);
-          y += 16;
+        // After filling 2 rows (4 cards), bump y for next page start
+        if ((i + 1) % 4 === 0 && i + 1 < shotList.length) {
+          y = margin; // reset for addPage() at top of loop
         }
       }
+
       doc.save('shot-list.pdf');
     } finally { setPdfDownloading(false); }
   }
@@ -653,8 +667,8 @@ export default function Home() {
   // ── render
   return (
     <div style={{ height: '100vh', display: 'flex', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans', sans-serif", color: C.text, background: C.bg }}>
-      <ShotListSidebar />
-      <EditorBriefSidebar />
+      {ShotListSidebar()}
+      {EditorBriefSidebar()}
 
       {/* ── Sidebar */}
       <div style={{ width: sidebarCollapsed ? 52 : 280, minWidth: sidebarCollapsed ? 52 : 280, height: '100%', background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', transition: 'width 0.2s cubic-bezier(.4,0,.2,1), min-width 0.2s cubic-bezier(.4,0,.2,1)', overflow: 'hidden', flexShrink: 0, zIndex: 10 }}>
@@ -996,15 +1010,10 @@ export default function Home() {
                                               {frame && (
                                                 <div
                                                   style={{ position: 'absolute', bottom: 5, right: 5 }}
-                                                  onClick={async e => {
+                                                  onClick={e => {
                                                     e.stopPropagation();
                                                     if (alreadyAdded) return;
-                                                    // Capture high-res version (540px) for PDF quality
-                                                    const vid = captureVideoRef.current;
-                                                    const nw = vid?.videoWidth || 9;
-                                                    const nh = vid?.videoHeight || 16;
-                                                    const hqThumb = vid ? await captureFrameFromVideo(vid, row.timestamp, 540, Math.round(540 * nh / nw)) : null;
-                                                    addToShotList({ thumbnail: frame, hqThumbnail: hqThumb || frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
+                                                    addToShotList({ thumbnail: frame, hqThumbnail: frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
                                                   }}>
                                                   <div style={{
                                                     width: 22, height: 22, borderRadius: '50%',
@@ -1099,14 +1108,11 @@ export default function Home() {
                                           {row.copy && <p style={{ fontSize: 12, color: C.text, fontStyle: 'italic', lineHeight: 1.5 }}>"{row.copy}"</p>}
                                         </div>
                                         {frame && (
-                                          <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={async e => {
+                                          <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={e => {
                                             e.stopPropagation();
                                             const already = shotList.some(s => s.thumbnail === frame);
                                             if (already) return;
-                                            const vid = captureVideoRef.current;
-                                            const nw = vid?.videoWidth || 9; const nh = vid?.videoHeight || 16;
-                                            const hqThumb = vid ? await captureFrameFromVideo(vid, row.timestamp, 540, Math.round(540 * nh / nw)) : null;
-                                            addToShotList({ thumbnail: frame, hqThumbnail: hqThumb || frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
+                                            addToShotList({ thumbnail: frame, hqThumbnail: frame, annotation: row.visual, shootDirection: '', source: `${urlFilename} · ${row.timestamp}`, videoUrl });
                                           }}>
                                             <AddToShotListBtn thumbnail={frame} annotation={row.visual} shootDirection="" source={`${urlFilename} · ${row.timestamp}`} videoUrl={videoUrl} />
                                           </div>
