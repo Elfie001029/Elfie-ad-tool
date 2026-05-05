@@ -662,7 +662,7 @@ export default function Home() {
 
     function renderShotsGrid(shots) {
       return isExpanded
-        ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>{shots.map(renderShotCard)}</div>
+        ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>{shots.map(renderShotCard)}</div>
         : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>{shots.map(renderShotCard)}</div>;
     }
 
