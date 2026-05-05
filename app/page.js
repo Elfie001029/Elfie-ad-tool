@@ -320,7 +320,7 @@ export default function Home() {
         });
       }
       const nw = video.videoWidth || 9; const nh = video.videoHeight || 16;
-      const w = 160; const h = Math.round(w * nh / nw);
+      const w = 1080; const h = Math.round(w * nh / nw);
       const dataUrl = await captureFrameFromVideo(video, kf.timestamp, w, h);
       const key = `${kf.video_index}:${kf.timestamp}`;
       frames[key] = dataUrl;
@@ -708,7 +708,8 @@ export default function Home() {
           </div>
 
           {/* Scrollable content */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: isExpanded ? '20px 32px' : '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: isExpanded ? '20px 32px' : '14px 20px' }}>
+          <div style={{ maxWidth: isExpanded ? 1200 : '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Add category */}
             <div>
@@ -777,6 +778,7 @@ export default function Home() {
                   </div>
                 </>
             }
+          </div>
           </div>
 
           {/* Footer */}
