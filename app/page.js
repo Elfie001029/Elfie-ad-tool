@@ -434,6 +434,7 @@ export default function Home() {
     const d = dragData.current; if (!d) { setDragOverTarget(null); return; }
     if (d.type === 'shot') {
       setShotList(prev => prev.map(s => s.id === d.id ? { ...s, sectionId: targetSectionId } : s));
+      setExpandedSectionIds(prev => { const next = new Set(prev); next.delete(targetSectionId); return next; });
     } else if (d.type === 'section' && d.id !== targetSectionId) {
       setSections(prev => {
         const arr = [...prev];
