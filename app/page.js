@@ -171,6 +171,7 @@ export default function Home() {
   }
   const videoRef = useRef(null);
   const captureVideoRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const [capturedFrames, setCapturedFrames] = useState({});
   const [capturingFrames, setCapturingFrames] = useState(false);
   const [openerFrame, setOpenerFrame] = useState(null);
@@ -668,6 +669,16 @@ export default function Home() {
       );
     }
 
+    function handleDragOverScroll(e) {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const zone = 80;
+      if (y < zone) el.scrollTop -= Math.round((zone - y) / 4);
+      else if (y > rect.height - zone) el.scrollTop += Math.round((y - rect.height + zone) / 4);
+    }
+
     function renderFilmstrip(shots) {
       const visible = shots.slice(0, 8);
       const extra = shots.length - 8;
@@ -731,110 +742,153 @@ export default function Home() {
           </div>
 
           {/* Scrollable content */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: isExpanded ? '20px 32px' : '14px 20px' }}>
-          <div style={{ maxWidth: isExpanded ? 800 : '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {isExpanded ? (
+            /* EXPANDED: sticky categories + always-visible unsorted below */
+            <div ref={scrollContainerRef} onDragOver={handleDragOverScroll} style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ maxWidth: 800, margin: '0 auto' }}>
 
-            {/* Add category */}
-            <div>
-              <button onClick={addSection}
-                style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                + Add category
-              </button>
-            </div>
-
-            {shotList.length === 0
-              ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, textAlign: 'center', padding: '0 24px' }}>
-                  <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
-                  <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
-                </div>
-              : <>
-                  {/* Named sections */}
-                  {sections.map(section => {
-                    const sectionShots = shotList.filter(sh => sh.sectionId === section.id);
-                    const isDragOver = dragOverTarget === `section-${section.id}`;
-                    const isOpen = expandedSectionIds.has(section.id);
-                    return (
-                      <div key={section.id}
-                        onDragOver={e => { e.preventDefault(); setDragOverTarget(`section-${section.id}`); }}
-                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
-                        onDrop={e => handleDropOnSection(e, section.id)}
-                        style={{ border: `1.5px dashed ${isDragOver ? C.accent : C.border}`, borderRadius: 12, background: isDragOver ? C.accentLight : C.surface, transition: 'border-color 0.1s, background 0.1s', overflow: 'hidden' }}>
-                        {/* Section header — click to expand */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer' }}
-                          onClick={() => toggleSectionExpanded(section.id)}>
-                          <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, cursor: 'grab' }}
-                            draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }}
-                            onClick={e => e.stopPropagation()}>⠿</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            {editingSectionId === section.id
-                              ? <input autoFocus value={section.name}
-                                  onChange={e => updateSectionName(section.id, e.target.value)}
-                                  onBlur={() => setEditingSectionId(null)}
-                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }}
-                                  onClick={e => e.stopPropagation()}
-                                  style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
-                              : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }}
-                                  style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
-                                  {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
-                                </span>
-                            }
-                          </div>
-                          <button onClick={e => { e.stopPropagation(); deleteSection(section.id); }}
-                            style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 16, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
-                          <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{isOpen ? '▾' : '▸'}</span>
-                        </div>
-                        {/* Collapsed: filmstrip */}
-                        {!isOpen && sectionShots.length > 0 && renderFilmstrip(sectionShots)}
-                        {!isOpen && sectionShots.length === 0 && (
-                          <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '6px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>
-                        )}
-                        {/* Expanded: full grid */}
-                        {isOpen && (
-                          <div style={{ padding: '0 12px 12px' }}>
-                            {renderShotsGrid(sectionShots)}
-                            {sectionShots.length === 0 && (
-                              <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>Drop shots here</p>
+                {/* Sticky bin — categories */}
+                <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8f9fb', padding: '12px 32px', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ marginBottom: sections.length > 0 ? 10 : 0 }}>
+                    <button onClick={addSection} style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
+                  </div>
+                  {sections.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {sections.map(section => {
+                        const sectionShots = shotList.filter(sh => sh.sectionId === section.id);
+                        const isDragOver = dragOverTarget === `section-${section.id}`;
+                        const isOpen = expandedSectionIds.has(section.id);
+                        const displayShots = sectionShots.slice(0, 6);
+                        const overflow = sectionShots.length - 6;
+                        return (
+                          <div key={section.id}
+                            onDragOver={e => { e.preventDefault(); setDragOverTarget(`section-${section.id}`); }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                            onDrop={e => handleDropOnSection(e, section.id)}
+                            style={{ border: `1.5px dashed ${isDragOver ? C.accent : C.border}`, borderRadius: 12, background: isDragOver ? C.accentLight : C.surface, transition: 'border-color 0.1s, background 0.1s', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer' }}
+                              onClick={() => toggleSectionExpanded(section.id)}>
+                              <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, cursor: 'grab' }}
+                                draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }}
+                                onClick={e => e.stopPropagation()}>⠿</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {editingSectionId === section.id
+                                  ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                                  : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
+                                      {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
+                                    </span>
+                                }
+                              </div>
+                              <button onClick={e => { e.stopPropagation(); deleteSection(section.id); }} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 16, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{isOpen ? '▾' : '▸'}</span>
+                            </div>
+                            {!isOpen && sectionShots.length > 0 && renderFilmstrip(sectionShots)}
+                            {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '4px 12px 10px', fontStyle: 'italic' }}>Drop shots here</p>}
+                            {isOpen && (
+                              <div style={{ padding: '0 12px 12px' }}>
+                                {sectionShots.length === 0
+                                  ? <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '10px 0', fontStyle: 'italic' }}>Drop shots here</p>
+                                  : <>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>{displayShots.map(renderShotCard)}</div>
+                                      {overflow > 0 && <p style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 8 }}>+{overflow} more in this category</p>}
+                                    </>
+                                }
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-                  {/* Unsorted shots */}
-                  {(() => {
-                    const isOpen = sections.length === 0 || expandedSectionIds.has('__unsorted__');
-                    return (
-                      <div
-                        onDragOver={e => { e.preventDefault(); setDragOverTarget('unsorted'); }}
-                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
-                        onDrop={handleDropOnUnsorted}
-                        style={sections.length > 0 ? { border: `1.5px dashed ${dragOverTarget === 'unsorted' ? C.accent : C.border}`, borderRadius: 12, background: dragOverTarget === 'unsorted' ? C.accentLight : C.surface, transition: 'border-color 0.1s, background 0.1s', overflow: 'hidden' } : {}}>
-                        {sections.length > 0 && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer' }}
-                            onClick={() => toggleSectionExpanded('__unsorted__')}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', flex: 1 }}>
-                              Unsorted <span style={{ fontWeight: 400, color: C.muted }}>({unsortedShots.length})</span>
-                            </span>
-                            <span style={{ fontSize: 11, color: C.muted }}>{isOpen ? '▾' : '▸'}</span>
-                          </div>
-                        )}
-                        {!isOpen && unsortedShots.length > 0 && renderFilmstrip(unsortedShots)}
-                        {!isOpen && unsortedShots.length === 0 && sections.length > 0 && (
-                          <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '6px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>
-                        )}
-                        {isOpen && (
-                          <div style={sections.length > 0 ? { padding: '0 12px 12px' } : {}}>
-                            {renderShotsGrid(unsortedShots)}
-                          </div>
-                        )}
+                {/* Always-visible unsorted — the table */}
+                <div onDragOver={e => { e.preventDefault(); setDragOverTarget('unsorted'); }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                  onDrop={handleDropOnUnsorted}
+                  style={{ padding: '16px 32px' }}>
+                  {shotList.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                        <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                        <p style={{ fontSize: 12, color: C.muted }}>Click + on any captured frame to add it here.</p>
                       </div>
-                    );
-                  })()}
-                </>
-            }
-          </div>
-          </div>
+                    : <>
+                        {sections.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                            <div style={{ flex: 1, height: 1, background: C.border }} />
+                            <span style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>Unsorted · {unsortedShots.length}</span>
+                            <div style={{ flex: 1, height: 1, background: C.border }} />
+                          </div>
+                        )}
+                        {renderShotsGrid(unsortedShots)}
+                      </>
+                  }
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* SIDEBAR: simple vertical flow */
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <button onClick={addSection} style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
+                </div>
+                {shotList.length === 0
+                  ? <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                      <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
+                    </div>
+                  : <>
+                      {sections.map(section => {
+                        const sectionShots = shotList.filter(sh => sh.sectionId === section.id);
+                        const isDragOver = dragOverTarget === `section-${section.id}`;
+                        const isOpen = expandedSectionIds.has(section.id);
+                        return (
+                          <div key={section.id}
+                            onDragOver={e => { e.preventDefault(); setDragOverTarget(`section-${section.id}`); }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }}
+                            onDrop={e => handleDropOnSection(e, section.id)}
+                            style={{ border: `1.5px dashed ${isDragOver ? C.accent : C.border}`, borderRadius: 12, background: isDragOver ? C.accentLight : C.surface, transition: 'border-color 0.1s, background 0.1s', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer' }} onClick={() => toggleSectionExpanded(section.id)}>
+                              <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, cursor: 'grab' }} draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }} onClick={e => e.stopPropagation()}>⠿</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {editingSectionId === section.id
+                                  ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                                  : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
+                                      {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
+                                    </span>
+                                }
+                              </div>
+                              <button onClick={e => { e.stopPropagation(); deleteSection(section.id); }} style={{ background: 'none', border: 'none', color: C.mutedLight, fontSize: 16, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                              <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{isOpen ? '▾' : '▸'}</span>
+                            </div>
+                            {!isOpen && sectionShots.length > 0 && renderFilmstrip(sectionShots)}
+                            {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '6px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>}
+                            {isOpen && (
+                              <div style={{ padding: '0 12px 12px' }}>
+                                {renderShotsGrid(sectionShots)}
+                                {sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>Drop shots here</p>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <div onDragOver={e => { e.preventDefault(); setDragOverTarget('unsorted'); }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverTarget(null); }} onDrop={handleDropOnUnsorted}
+                        style={sections.length > 0 ? { border: `1.5px dashed ${dragOverTarget === 'unsorted' ? C.accent : C.border}`, borderRadius: 12, background: dragOverTarget === 'unsorted' ? C.accentLight : 'transparent', transition: 'border-color 0.1s, background 0.1s', padding: 12 } : {}}>
+                        {sections.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ flex: 1, height: 1, background: C.border }} />
+                            <span style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Unsorted</span>
+                            <div style={{ flex: 1, height: 1, background: C.border }} />
+                          </div>
+                        )}
+                        {renderShotsGrid(unsortedShots)}
+                      </div>
+                    </>
+                }
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#fff' }}>
