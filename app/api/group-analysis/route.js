@@ -91,6 +91,12 @@ Return a valid JSON object with EXACTLY this structure. No markdown, no backtick
       ]
     }
   ],
+  "product_body_script": {
+    "script": "A ready-to-use product description body script of 60-120 words, written in this brand's voice. This is the middle section of an ad: what the product is, how it works, the mechanism or key ingredients, and the quantified proof (stats, studies, timeframes). NO hook, NO personal story, NO CTA — pure product explanation a strategist could drop into any new ad for this product.",
+    "based_on": [
+      "Short note on a recurring claim or line this script drew from, e.g. 'The 90-day clinical study cited in 3/3 ads'"
+    ]
+  },
   "copy_templates": [
     {
       "template": "A fill-in-the-blank line used across multiple ads, with [placeholders] e.g. 'If you're a [target audience] dealing with [pain point], you need to hear this'",
@@ -105,12 +111,6 @@ Return a valid JSON object with EXACTLY this structure. No markdown, no backtick
       "observation": "What this brand consistently does and why it likely works for their audience"
     }
   ],
-  "product_body_script": {
-    "script": "A ready-to-use product description body script of 60-120 words, written in this brand's voice. This is the middle section of an ad: what the product is, how it works, the mechanism or key ingredients, and the quantified proof (stats, studies, timeframes). NO hook, NO personal story, NO CTA — pure product explanation a strategist could drop into any new ad for this product.",
-    "based_on": [
-      "Short note on a recurring claim or line this script drew from, e.g. 'The 90-day clinical study cited in 3/3 ads'"
-    ]
-  },
   "broll_logic": {
     "summary": "One paragraph describing the consistent B-roll pairing logic across all videos — what script content triggers each footage type and why this brand uses that pattern strategically",
     "rules": [
@@ -152,6 +152,29 @@ RULES:
         JSON.stringify({ error: 'Pattern synthesis came back in an unreadable format. Please try again.', raw }),
         { status: 502 }
       );
+    }
+
+    // The product body script must always ship — if the main synthesis lost it
+    // (truncated tail, model skipped the field), generate it in a small
+    // dedicated call from the same condensed breakdowns.
+    if (!parsed.product_body_script?.script) {
+      console.log('product_body_script missing from synthesis, generating separately...');
+      try {
+        const { parsed: pbs } = await generateParsedJson(ai, {
+          model: GEMINI_MODEL,
+          config: JSON_CONFIG,
+          contents: [{ role: 'user', parts: [{ text: `You are a senior creative strategist. Below are structured breakdowns of ${condensed.length} video ads from the same brand (verbatim scripts, value propositions, ad structures).
+
+${JSON.stringify(condensed.map(c => ({ video_index: c.video_index, script: c.script, value_propositions: c.value_propositions })), null, 1)}
+
+Write a ready-to-use product description body script of 60-120 words in this brand's voice: what the product is, how it works, the mechanism or key ingredients, and the quantified proof (stats, studies, timeframes) — built from the Scientific facts and product claims that recur across these ads, reusing the brand's own proven phrasing wherever possible. NO hook, NO personal story, NO CTA.
+
+Return raw JSON only, exactly: {"script": "...", "based_on": ["Short note on a recurring claim this drew from"]}` }] }]
+        });
+        if (pbs?.script) parsed.product_body_script = pbs;
+      } catch (e) {
+        console.log('Fallback product_body_script generation failed:', e.message);
+      }
     }
 
     return new Response(JSON.stringify({ result: parsed, raw }), { status: 200 });
