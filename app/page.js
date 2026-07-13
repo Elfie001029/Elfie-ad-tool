@@ -377,14 +377,25 @@ export default function Home() {
       setGroupSingleAnalyses(null); setStructHover(null); setExpandedTalkingPoints(new Set());
       setGroupProgress({ done: 0, total: resolved.length, stage: 'videos' });
       try {
-        // Stage 1: full analysis of each video, in parallel
-        const analyses = await Promise.all(resolved.map(async (url, i) => {
-          const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: context }) });
-          const data = await res.json();
-          if (data.error || !data.analysis) throw new Error(data.error || `Video ${i + 1} could not be analyzed.`);
-          setGroupProgress(p => p ? { ...p, done: p.done + 1 } : p);
-          return data.analysis;
+        // Stage 1: full analysis of each video, in parallel. A single failed
+        // video is dropped from the group instead of killing the whole run.
+        const results = await Promise.all(resolved.map(async (url, i) => {
+          try {
+            const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: context }) });
+            const data = await res.json();
+            if (data.error || !data.analysis) throw new Error(data.error || `Video ${i + 1} could not be analyzed.`);
+            return { url, analysis: data.analysis };
+          } catch (err) {
+            return { url, error: err.message || `Video ${i + 1} could not be analyzed.` };
+          } finally {
+            setGroupProgress(p => p ? { ...p, done: p.done + 1 } : p);
+          }
         }));
+        const ok = results.filter(r => r.analysis);
+        const failed = results.length - ok.length;
+        if (ok.length < 2) throw new Error(results.find(r => r.error)?.error || 'The videos could not be analyzed.');
+        const analyses = ok.map(r => r.analysis);
+        setGroupUrls(ok.map(r => r.url));
         // Stage 2: text-only synthesis pass across the structured breakdowns
         setGroupProgress(p => p ? { ...p, stage: 'synthesis' } : p);
         const res = await fetch('/api/group-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ analyses, context }) });
@@ -392,6 +403,7 @@ export default function Home() {
         if (data.error) return setGroupError(data.error);
         setGroupSingleAnalyses(analyses);
         setGroupResult(assembleGroupResult(analyses, data.result));
+        if (failed > 0) setGroupError(`${failed} video${failed > 1 ? 's' : ''} couldn't be analyzed and ${failed > 1 ? 'were' : 'was'} left out of this group.`);
       } catch (err) { setGroupError(err.message || 'Something went wrong. Please try again.'); }
       finally { setGroupRunning(false); setGroupProgress(null); }
     }

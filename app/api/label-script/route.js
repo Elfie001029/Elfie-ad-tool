@@ -1,4 +1,6 @@
-import { getGeminiClient, parseGeminiJson, GEMINI_MODEL } from '@/lib/gemini';
+import { getGeminiClient, generateParsedJson, GEMINI_MODEL, JSON_CONFIG } from '@/lib/gemini';
+
+export const maxDuration = 120;
 
 export async function POST(request) {
   const { script, brollLogic } = await request.json();
@@ -33,14 +35,11 @@ Return a JSON array with EXACTLY this structure. No markdown, no backticks, no e
   }
 ]`;
 
-    const response = await ai.models.generateContent({
+    const { parsed, raw } = await generateParsedJson(ai, {
       model: GEMINI_MODEL,
-      config: { responseMimeType: 'application/json' },
+      config: JSON_CONFIG,
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
-
-    const raw = response.text;
-    const parsed = parseGeminiJson(raw);
 
     if (!parsed) {
       return new Response(

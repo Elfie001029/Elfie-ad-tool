@@ -1,4 +1,6 @@
-import { getGeminiClient, parseGeminiJson, GEMINI_MODEL } from '@/lib/gemini';
+import { getGeminiClient, generateParsedJson, GEMINI_MODEL, JSON_CONFIG } from '@/lib/gemini';
+
+export const maxDuration = 300;
 
 // Synthesis pass: receives the structured per-video analyses produced by
 // /api/analyze-video and finds cross-ad patterns. No video bytes are sent —
@@ -131,14 +133,11 @@ RULES:
 
     console.log('Sending to Gemini for group synthesis...');
 
-    const response = await ai.models.generateContent({
+    const { parsed, raw } = await generateParsedJson(ai, {
       model: GEMINI_MODEL,
-      config: { responseMimeType: 'application/json' },
+      config: JSON_CONFIG,
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
-
-    const raw = response.text;
-    const parsed = parseGeminiJson(raw);
 
     if (!parsed) {
       console.log('JSON parse failed for group synthesis');

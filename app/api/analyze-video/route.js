@@ -1,4 +1,6 @@
-import { getGeminiClient, fetchVideoAsBase64, parseGeminiJson, GEMINI_MODEL } from '@/lib/gemini';
+import { getGeminiClient, fetchVideoAsBase64, generateParsedJson, GEMINI_MODEL, JSON_CONFIG } from '@/lib/gemini';
+
+export const maxDuration = 300;
 
 export async function POST(request) {
   const { videoUrl, adContext } = await request.json();
@@ -16,9 +18,9 @@ export async function POST(request) {
 
     console.log('Video fetched, sending to Gemini...');
 
-    const response = await ai.models.generateContent({
+    const { parsed, raw: geminiAnalysis } = await generateParsedJson(ai, {
       model: GEMINI_MODEL,
-      config: { responseMimeType: 'application/json' },
+      config: JSON_CONFIG,
       contents: [
         {
           role: 'user',
@@ -132,9 +134,6 @@ IMPORTANT for copy_only and transferrable_copy: cover the ENTIRE script from sta
         }
       ]
     });
-
-    const geminiAnalysis = response.text;
-    const parsed = parseGeminiJson(geminiAnalysis);
 
     if (!parsed) {
       console.log('JSON parse failed for analyze-video');
