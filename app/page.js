@@ -44,17 +44,17 @@ const SECTION_COLORS = {
 // ── Design tokens
 const C = {
   bg: '#ffffff',
-  surface: '#f7f8ff',
-  surfaceHover: '#f0f2fe',
-  border: '#e4e6f0',
-  borderStrong: '#d0d4e8',
-  text: '#0d0f1a',
-  textSub: '#3d4158',
-  muted: '#8b90a7',
-  mutedLight: '#c4c7d8',
-  accent: '#2563eb',
-  accentLight: '#eff6ff',
-  accentBorder: '#bfdbfe',
+  surface: '#fdf7fa',
+  surfaceHover: '#fbeff5',
+  border: '#f0e2ea',
+  borderStrong: '#e3ccd9',
+  text: '#1a0d14',
+  textSub: '#584151',
+  muted: '#a78b9c',
+  mutedLight: '#d8c4cf',
+  accent: '#db2777',
+  accentLight: '#fdf2f8',
+  accentBorder: '#fbcfe8',
   mono: "'IBM Plex Mono', monospace",
 };
 
@@ -1148,7 +1148,7 @@ export default function Home() {
                     onMouseLeave={e => e.currentTarget.querySelector('.card-overlay').style.opacity = '0'}>
                     <button onClick={() => openFromLibrary(entry)}
                       style={{ width: '100%', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', textAlign: 'left', padding: 0, cursor: 'pointer', display: 'block', transition: 'border-color 0.12s, box-shadow 0.12s' }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accentBorder; e.currentTarget.style.boxShadow = '0 2px 10px rgba(37,99,235,0.1)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accentBorder; e.currentTarget.style.boxShadow = '0 2px 10px rgba(219,39,119,0.1)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
                       <div style={{ aspectRatio: '9/16', background: '#0d0f1a', position: 'relative', overflow: 'hidden' }}>
                         {entry.thumbnail
@@ -1447,7 +1447,7 @@ export default function Home() {
                                                   }}>
                                                   <div style={{
                                                     width: 22, height: 22, borderRadius: '50%',
-                                                    background: alreadyAdded ? 'rgba(37,99,235,0.9)' : 'rgba(255,255,255,0.85)',
+                                                    background: alreadyAdded ? 'rgba(219,39,119,0.9)' : 'rgba(255,255,255,0.85)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     fontSize: 13, fontWeight: 700, lineHeight: 1,
                                                     color: alreadyAdded ? '#fff' : C.text,
@@ -1976,7 +1976,7 @@ export default function Home() {
                                                 e.stopPropagation();
                                                 if (!shotList.some(s => s.thumbnail === thumb)) addToShotList({ thumbnail: thumb, hqThumbnail: thumb, annotation: frame.visual, shootDirection: '', source: `Group V${va.video_index + 1} · ${frame.timestamp}`, videoUrl: vidUrl });
                                               }}>
-                                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: shotList.some(s => s.thumbnail === thumb) ? 'rgba(37,99,235,0.9)' : 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: shotList.some(s => s.thumbnail === thumb) ? '#fff' : C.text, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+                                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: shotList.some(s => s.thumbnail === thumb) ? 'rgba(219,39,119,0.9)' : 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: shotList.some(s => s.thumbnail === thumb) ? '#fff' : C.text, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
                                                   {shotList.some(s => s.thumbnail === thumb) ? '✓' : '+'}
                                                 </div>
                                               </div>
