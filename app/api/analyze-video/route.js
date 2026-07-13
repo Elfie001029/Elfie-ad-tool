@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { getGeminiClient, fetchVideoAsBase64, parseGeminiJson, GEMINI_MODEL } from '@/lib/gemini';
 
 export async function POST(request) {
   const { videoUrl, adContext } = await request.json();
@@ -9,20 +9,16 @@ export async function POST(request) {
   );
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = getGeminiClient();
 
     console.log('Fetching video from:', videoUrl);
-    const videoRes = await fetch(videoUrl);
-    if (!videoRes.ok) throw new Error(`Could not fetch video: ${videoRes.status}`);
-
-    const videoBuffer = await videoRes.arrayBuffer();
-    const videoBase64 = Buffer.from(videoBuffer).toString('base64');
-    const contentType = videoRes.headers.get('content-type') || 'video/mp4';
+    const { base64: videoBase64, contentType } = await fetchVideoAsBase64(videoUrl);
 
     console.log('Video fetched, sending to Gemini...');
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: GEMINI_MODEL,
+      config: { responseMimeType: 'application/json' },
       contents: [
         {
           role: 'user',
@@ -138,13 +134,14 @@ IMPORTANT for copy_only and transferrable_copy: cover the ENTIRE script from sta
     });
 
     const geminiAnalysis = response.text;
+    const parsed = parseGeminiJson(geminiAnalysis);
 
-    let parsed = null;
-    try {
-      const clean = geminiAnalysis.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
-    } catch(e) {
-      console.log('JSON parse failed, returning raw:', e.message);
+    if (!parsed) {
+      console.log('JSON parse failed for analyze-video');
+      return new Response(
+        JSON.stringify({ error: 'The analysis came back in an unreadable format. Please try again.', raw: geminiAnalysis }),
+        { status: 502 }
+      );
     }
 
     return new Response(JSON.stringify({

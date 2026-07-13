@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { getGeminiClient, parseGeminiJson, GEMINI_MODEL } from '@/lib/gemini';
 
 export async function POST(request) {
   const { script, brollLogic } = await request.json();
@@ -9,7 +9,7 @@ export async function POST(request) {
   );
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = getGeminiClient();
 
     const rulesText = brollLogic?.rules?.length
       ? brollLogic.rules.map(r => `- When: "${r.trigger}" → use ${r.footage_type} — ${r.reason}`).join('\n')
@@ -34,17 +34,19 @@ Return a JSON array with EXACTLY this structure. No markdown, no backticks, no e
 ]`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-04-17',
+      model: GEMINI_MODEL,
+      config: { responseMimeType: 'application/json' },
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
 
     const raw = response.text;
-    let parsed = null;
-    try {
-      const clean = raw.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
-    } catch (e) {
-      console.log('JSON parse failed:', e.message);
+    const parsed = parseGeminiJson(raw);
+
+    if (!parsed) {
+      return new Response(
+        JSON.stringify({ error: 'Script labeling came back in an unreadable format. Please try again.', raw }),
+        { status: 502 }
+      );
     }
 
     return new Response(JSON.stringify({ result: parsed, raw }), { status: 200 });

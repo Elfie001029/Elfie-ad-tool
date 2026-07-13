@@ -20,6 +20,14 @@ const TYPE_COLORS_INLINE = {
   product_broll: { bg: '#fffbeb', color: '#b45309' },
   greenscreen:   { bg: '#faf5ff', color: '#7e22ce' },
 };
+const TP_CATEGORIES = {
+  pain_point: { label: 'Pain point', bg: '#fef2f2', color: '#b91c1c' },
+  benefit:    { label: 'Benefit',    bg: '#f0fdf4', color: '#15803d' },
+  proof:      { label: 'Proof',      bg: '#faf5ff', color: '#7e22ce' },
+  objection:  { label: 'Objection',  bg: '#fff7ed', color: '#c2410c' },
+  offer:      { label: 'Offer',      bg: '#fffbeb', color: '#b45309' },
+  other:      { label: 'Theme',      bg: '#f3f4f6', color: '#6b7280' },
+};
 const SECTION_COLORS = {
   'Hook':                { bg: '#3b82f6', light: 'bg-blue-50',   text: 'text-blue-700' },
   'Opener':              { bg: '#f97316', light: 'bg-orange-50', text: 'text-orange-700' },
@@ -58,6 +66,86 @@ function timestampToSeconds(ts) {
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return parts[0];
 }
+function secondsToTimestamp(s) {
+  s = Math.max(0, Math.round(s));
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+}
+
+// ── Group assembly: deterministic stats computed from per-video analyses,
+//    merged with the LLM synthesis pass into one groupResult object.
+function computeGroupStructures(analyses) {
+  return analyses.map((a, i) => {
+    const g = a?.general || {};
+    const timeline = a?.timeline || [];
+    let duration_s = timestampToSeconds(g.duration);
+    if (!duration_s && timeline.length) duration_s = timestampToSeconds(timeline[timeline.length - 1].timestamp) + 2;
+    const sections = (g.ad_structure || [])
+      .map(s => {
+        const start_s = timestampToSeconds(s.start);
+        let end_s = timestampToSeconds(s.end);
+        if (end_s <= start_s) end_s = duration_s ? Math.min(start_s + 1, duration_s) : start_s + 1;
+        return { section: s.section, start_s, end_s };
+      })
+      .filter(s => !duration_s || s.start_s < duration_s);
+    return { video_index: i, duration: g.duration, duration_s, cuts: timeline.length, sections };
+  });
+}
+
+function computeStructureConsensus(structures) {
+  const valid = structures.filter(v => v.duration_s > 0 && v.sections.length);
+  if (!valid.length) return [];
+  const byName = new Map();
+  valid.forEach(v => {
+    const seen = new Set();
+    v.sections.forEach(s => {
+      if (!byName.has(s.section)) byName.set(s.section, { section: s.section, videos: 0, startPcts: [], lenByVideo: new Map() });
+      const e = byName.get(s.section);
+      if (!seen.has(s.section)) {
+        seen.add(s.section);
+        e.videos += 1;
+        e.startPcts.push((s.start_s / v.duration_s) * 100);
+      }
+      e.lenByVideo.set(v.video_index, (e.lenByVideo.get(v.video_index) || 0) + ((s.end_s - s.start_s) / v.duration_s) * 100);
+    });
+  });
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  return [...byName.values()]
+    .map(e => ({
+      section: e.section,
+      appears_in: e.videos,
+      total: valid.length,
+      avg_start_pct: Math.round(avg(e.startPcts)),
+      avg_len_pct: Math.round(avg([...e.lenByVideo.values()])),
+    }))
+    .sort((a, b) => a.avg_start_pct - b.avg_start_pct);
+}
+
+function assembleGroupResult(analyses, synthesis) {
+  const structures = computeGroupStructures(analyses);
+  const durations = structures.map(s => s.duration_s).filter(Boolean);
+  const cuts = structures.map(s => s.cuts).filter(Boolean);
+  const starred = new Map((synthesis.starred_frames || []).map(f => [`${f.video_index}:${f.timestamp}`, f.why || null]));
+  const video_analyses = analyses.map((a, i) => ({
+    video_index: i,
+    frames: (a?.timeline || []).map(t => {
+      const key = `${i}:${t.timestamp}`;
+      return {
+        timestamp: t.timestamp, type: t.type, visual: t.visual, copy: t.copy || '',
+        is_starred: starred.has(key), why_starred: starred.get(key) || null,
+      };
+    }),
+  }));
+  return {
+    ...synthesis,
+    avg_duration: durations.length ? secondsToTimestamp(durations.reduce((a, b) => a + b, 0) / durations.length) : null,
+    avg_cuts: cuts.length ? Math.round(cuts.reduce((a, b) => a + b, 0) / cuts.length) : null,
+    structures,
+    structure_consensus: computeStructureConsensus(structures),
+    video_analyses,
+  };
+}
+
 function formatDate(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 86400000);
   if (diff === 0) return 'Today';
@@ -187,6 +275,10 @@ export default function Home() {
   const [groupFirstFrames, setGroupFirstFrames] = useState({}); // vidIdx → dataUrl
   const [groupSelectedVideoIdx, setGroupSelectedVideoIdx] = useState(null);
   const [groupHoveredFrame, setGroupHoveredFrame] = useState(null); // { videoIdx, frameIdx }
+  const [groupProgress, setGroupProgress] = useState(null); // { done, total, stage: 'videos' | 'synthesis' }
+  const [groupSingleAnalyses, setGroupSingleAnalyses] = useState(null); // per-video analyses from the last run (not persisted)
+  const [structHover, setStructHover] = useState(null); // { videoIdx, sectionIdx, section }
+  const [expandedTalkingPoints, setExpandedTalkingPoints] = useState(new Set());
   const groupVideoRefs = useRef([]);
 
   // ── editor brief
@@ -231,6 +323,7 @@ export default function Home() {
     setVideoAnalysis(null); setGroupResult(null);
     setVideoError(''); setGroupError('');
     setCapturedFrames({}); setOpenerFrame(null); setGroupKeyFrames({}); setGroupFirstFrames({}); setGroupSelectedVideoIdx(null); setGroupHoveredFrame(null);
+    setGroupProgress(null); setGroupSingleAnalyses(null); setStructHover(null); setExpandedTalkingPoints(new Set());
   }
 
   // ── main analyze handler
@@ -280,14 +373,27 @@ export default function Home() {
       setGroupUrls(resolved); setGroupContext(context);
       setAnalysisType('group'); setMode('analysis');
       freshGroupAnalysis.current = true;
-      setGroupError(''); setGroupRunning(true); setGroupResult(null); setGroupKeyFrames({});
+      setGroupError(''); setGroupRunning(true); setGroupResult(null); setGroupKeyFrames({}); setGroupFirstFrames({});
+      setGroupSingleAnalyses(null); setStructHover(null); setExpandedTalkingPoints(new Set());
+      setGroupProgress({ done: 0, total: resolved.length, stage: 'videos' });
       try {
-        const res = await fetch('/api/group-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrls: filled, context }) });
+        // Stage 1: full analysis of each video, in parallel
+        const analyses = await Promise.all(resolved.map(async (url, i) => {
+          const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: context }) });
+          const data = await res.json();
+          if (data.error || !data.analysis) throw new Error(data.error || `Video ${i + 1} could not be analyzed.`);
+          setGroupProgress(p => p ? { ...p, done: p.done + 1 } : p);
+          return data.analysis;
+        }));
+        // Stage 2: text-only synthesis pass across the structured breakdowns
+        setGroupProgress(p => p ? { ...p, stage: 'synthesis' } : p);
+        const res = await fetch('/api/group-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ analyses, context }) });
         const data = await res.json();
         if (data.error) return setGroupError(data.error);
-        setGroupResult(data.result);
-      } catch { setGroupError('Something went wrong. Please try again.'); }
-      finally { setGroupRunning(false); }
+        setGroupSingleAnalyses(analyses);
+        setGroupResult(assembleGroupResult(analyses, data.result));
+      } catch (err) { setGroupError(err.message || 'Something went wrong. Please try again.'); }
+      finally { setGroupRunning(false); setGroupProgress(null); }
     }
   }
 
@@ -392,6 +498,7 @@ export default function Home() {
     if (entry.type === 'group') {
       setGroupUrls(entry.urls || []); setGroupContext('');
       setGroupResult(entry.groupResult); setGroupKeyFrames({}); setGroupFirstFrames({}); setGroupSelectedVideoIdx(null); setGroupHoveredFrame(null);
+      setGroupSingleAnalyses(null); setStructHover(null); setExpandedTalkingPoints(new Set());
       setAnalysisType('group'); setMode('analysis');
     } else {
       setVideoUrl(entry.urls?.[0] || entry.url || '');
@@ -1520,7 +1627,18 @@ export default function Home() {
                       <div className="flex items-center justify-center py-32">
                         <div className="text-center">
                           <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
-                          <p style={{ fontSize: 14, color: C.muted }}>Analyzing group… this may take a few minutes</p>
+                          <p style={{ fontSize: 14, color: C.muted }}>
+                            {groupProgress?.stage === 'synthesis'
+                              ? 'Finding patterns across ads…'
+                              : groupProgress
+                                ? `Analyzing each ad in full… ${groupProgress.done}/${groupProgress.total} done`
+                                : 'Analyzing group…'}
+                          </p>
+                          <p style={{ fontSize: 12, color: C.mutedLight, marginTop: 6 }}>
+                            {groupProgress?.stage === 'synthesis'
+                              ? 'Comparing structures, talking points and copy across the group'
+                              : 'Every ad gets a full breakdown first, then the group is compared'}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -1571,6 +1689,9 @@ export default function Home() {
                                         setVideoUrl(url); setVideoContext('');
                                         setAnalysisType('single'); setMode('analysis');
                                         setVideoError(''); setCapturedFrames({}); setOpenerFrame(null);
+                                        // Reuse the per-video analysis from this group run if we have it
+                                        const cached = groupSingleAnalyses?.[idx];
+                                        if (cached) { setVideoAnalysis(cached); return; }
                                         setAnalyzingVideo(true); setVideoAnalysis(null);
                                         try {
                                           const res = await fetch('/api/analyze-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoUrl: url, adContext: '' }) });
@@ -1652,6 +1773,151 @@ export default function Home() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Key talking points matrix */}
+                            {groupResult.talking_points?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Key talking points</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {/* header row */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+                                    <span style={{ flex: 1, fontSize: 10, color: C.muted, fontWeight: 600 }}>Talking point</span>
+                                    {filledUrls.map((_, vi) => (
+                                      <span key={vi} style={{ width: 30, textAlign: 'center', fontSize: 10, color: C.muted, fontWeight: 700, fontFamily: C.mono }}>V{vi + 1}</span>
+                                    ))}
+                                    <span style={{ width: 14 }} />
+                                  </div>
+                                  {groupResult.talking_points.map((tp, ti) => {
+                                    const cat = TP_CATEGORIES[tp.category] || TP_CATEGORIES.other;
+                                    const present = new Set((tp.appearances || []).map(a => a.video_index));
+                                    const expanded = expandedTalkingPoints.has(ti);
+                                    return (
+                                      <div key={ti} style={{ borderBottom: ti < groupResult.talking_points.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                        <div
+                                          onClick={() => setExpandedTalkingPoints(prev => { const next = new Set(prev); if (next.has(ti)) next.delete(ti); else next.add(ti); return next; })}
+                                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer' }}>
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                              <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: cat.bg, color: cat.color, flexShrink: 0 }}>{cat.label}</span>
+                                              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{tp.title}</span>
+                                            </div>
+                                            {tp.placement && <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>↳ {tp.placement}</p>}
+                                          </div>
+                                          {filledUrls.map((_, vi) => (
+                                            <span key={vi} style={{ width: 30, textAlign: 'center', fontSize: 12, fontWeight: 700, color: present.has(vi) ? C.accent : C.mutedLight }}>
+                                              {present.has(vi) ? '✓' : '–'}
+                                            </span>
+                                          ))}
+                                          <span style={{ width: 14, fontSize: 10, color: C.muted }}>{expanded ? '▾' : '▸'}</span>
+                                        </div>
+                                        {expanded && (tp.appearances || []).length > 0 && (
+                                          <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {tp.appearances.map((a, ai) => (
+                                              <div key={ai} style={{ display: 'flex', gap: 10, background: C.surface, borderRadius: 8, padding: '8px 12px' }}>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: C.accent, fontFamily: C.mono, flexShrink: 0, marginTop: 2 }}>V{(a.video_index ?? 0) + 1}</span>
+                                                <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>"{a.quote}"</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Structure fingerprints + consensus template */}
+                            {groupResult.structures?.some(v => v.duration_s > 0 && v.sections.length > 0) && (() => {
+                              const structures = groupResult.structures.filter(v => v.duration_s > 0 && v.sections.length);
+                              const consensus = groupResult.structure_consensus || [];
+                              const notesBySection = Object.fromEntries((groupResult.structure_notes || []).map(n => [n.section, n.description]));
+                              const usedSections = [...new Set(structures.flatMap(v => v.sections.map(s => s.section)))];
+                              const hoveredStruct = structHover ? structures.find(v => v.video_index === structHover.videoIdx) : null;
+                              const hoveredSeg = hoveredStruct?.sections[structHover.sectionIdx] || null;
+                              return (
+                                <div>
+                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
+
+                                  {/* legend */}
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginBottom: 12 }}>
+                                    {usedSections.map(s => (
+                                      <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.textSub }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: 2, background: SECTION_COLORS[s]?.bg || '#6b7280', flexShrink: 0 }} />{s}
+                                      </span>
+                                    ))}
+                                  </div>
+
+                                  {/* one normalized bar per video */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {structures.map(v => (
+                                      <div key={v.video_index} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <span style={{ width: 24, fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: C.mono, flexShrink: 0 }}>V{v.video_index + 1}</span>
+                                        <div style={{ flex: 1, display: 'flex', height: 26, borderRadius: 6, overflow: 'hidden', background: C.surface }}>
+                                          {v.sections.map((s, si) => {
+                                            const widthPct = ((s.end_s - s.start_s) / v.duration_s) * 100;
+                                            const dimmed = structHover && structHover.section !== s.section;
+                                            return (
+                                              <div key={si}
+                                                onMouseEnter={() => setStructHover({ videoIdx: v.video_index, sectionIdx: si, section: s.section })}
+                                                onMouseLeave={() => setStructHover(null)}
+                                                style={{
+                                                  width: `${widthPct}%`, background: SECTION_COLORS[s.section]?.bg || '#6b7280',
+                                                  opacity: dimmed ? 0.22 : 0.92, transition: 'opacity 0.12s',
+                                                  borderRight: si < v.sections.length - 1 ? '1px solid #fff' : 'none', cursor: 'default',
+                                                }} />
+                                            );
+                                          })}
+                                        </div>
+                                        <span style={{ width: 40, fontSize: 10, fontFamily: C.mono, color: C.muted, flexShrink: 0, textAlign: 'right' }}>{v.duration ? v.duration.slice(3) : ''}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* hover detail */}
+                                  <div style={{ marginTop: 8, minHeight: 34, background: C.surface, borderRadius: 10, padding: '8px 14px', border: `1px solid ${hoveredSeg ? C.accentBorder : C.border}`, transition: 'border-color 0.15s', display: 'flex', alignItems: 'center' }}>
+                                    {hoveredSeg ? (
+                                      <p style={{ fontSize: 12, color: C.textSub }}>
+                                        <span style={{ fontFamily: C.mono, color: C.accent }}>V{structHover.videoIdx + 1}</span>
+                                        {' · '}<span style={{ fontWeight: 600, color: C.text }}>{hoveredSeg.section}</span>
+                                        {' · '}{secondsToTimestamp(hoveredSeg.start_s).slice(3)}–{secondsToTimestamp(hoveredSeg.end_s).slice(3)}
+                                        {' · '}{Math.round(((hoveredSeg.end_s - hoveredSeg.start_s) / hoveredStruct.duration_s) * 100)}% of ad
+                                      </p>
+                                    ) : (
+                                      <p style={{ fontSize: 11, color: C.mutedLight }}>Hover a segment to compare the same section across ads.</p>
+                                    )}
+                                  </div>
+
+                                  {/* consensus template */}
+                                  {consensus.length > 0 && (
+                                    <div style={{ marginTop: 14, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                      {consensus.map((cs, i) => {
+                                        const sc = SECTION_COLORS[cs.section] || { bg: '#6b7280' };
+                                        const note = notesBySection[cs.section];
+                                        return (
+                                          <div key={cs.section} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < consensus.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: sc.bg + '18', color: sc.bg, flexShrink: 0, marginTop: 1, whiteSpace: 'nowrap' }}>{cs.section}</span>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                              <p style={{ fontSize: 11, color: C.muted, marginBottom: note ? 3 : 0 }}>
+                                                {cs.appears_in}/{cs.total} ads · starts ~{cs.avg_start_pct}% in · ~{cs.avg_len_pct}% of runtime
+                                              </p>
+                                              {note && <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{note}</p>}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* sequence pattern */}
+                                  {groupResult.sequence_pattern && (
+                                    <p style={{ marginTop: 10, fontSize: 12, color: C.textSub, lineHeight: 1.6, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 10, padding: '10px 14px' }}>
+                                      {groupResult.sequence_pattern}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             {/* Visual trend */}
                             {groupResult.visual_pattern && (
@@ -1747,8 +2013,28 @@ export default function Home() {
                               );
                             })}
 
-                            {/* Ad structure */}
-                            {groupResult.ad_structure_template?.length > 0 && (
+                            {/* Reusable copy templates */}
+                            {groupResult.copy_templates?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Reusable copy templates</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {groupResult.copy_templates.map((t, i) => (
+                                    <div key={i} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
+                                      <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.5, marginBottom: (t.variants || []).length ? 8 : 0 }}>{t.template}</p>
+                                      {(t.variants || []).map((v, vi) => (
+                                        <div key={vi} style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                                          <span style={{ fontSize: 10, fontWeight: 700, color: C.accent, fontFamily: C.mono, flexShrink: 0, marginTop: 2 }}>V{(v.video_index ?? 0) + 1}</span>
+                                          <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>"{v.line}"</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Ad structure (legacy results without per-video structure data) */}
+                            {!groupResult.structures?.length && groupResult.ad_structure_template?.length > 0 && (
                               <div>
                                 <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
                                 <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
