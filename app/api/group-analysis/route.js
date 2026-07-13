@@ -105,6 +105,12 @@ Return a valid JSON object with EXACTLY this structure. No markdown, no backtick
       "observation": "What this brand consistently does and why it likely works for their audience"
     }
   ],
+  "product_body_script": {
+    "script": "A ready-to-use product description body script of 60-120 words, written in this brand's voice. This is the middle section of an ad: what the product is, how it works, the mechanism or key ingredients, and the quantified proof (stats, studies, timeframes). NO hook, NO personal story, NO CTA — pure product explanation a strategist could drop into any new ad for this product.",
+    "based_on": [
+      "Short note on a recurring claim or line this script drew from, e.g. 'The 90-day clinical study cited in 3/3 ads'"
+    ]
+  },
   "broll_logic": {
     "summary": "One paragraph describing the consistent B-roll pairing logic across all videos — what script content triggers each footage type and why this brand uses that pattern strategically",
     "rules": [
@@ -127,6 +133,7 @@ Return a valid JSON object with EXACTLY this structure. No markdown, no backtick
 RULES:
 - talking_points is the most important output. Cluster the value propositions and script claims across ALL videos into 4-10 named talking points. Every quote must be VERBATIM from that video's script — never invent or paraphrase. Only list an appearance if the talking point genuinely occurs in that video. Order by how many videos each point appears in, descending.
 - copy_templates: only include lines where 2+ videos use a recognizably similar formulation. 2-5 templates max.
+- product_body_script: build it from the Scientific facts, Product introduction, and value proposition content that recurs across these ads. Reuse the brand's own proven phrasing wherever possible. It must stand alone as a factual product explanation — if the ads cite a stat, ingredient, or study, work it in.
 - structure_notes: one entry per section that appears in these ads, in the typical order they occur.
 - starred_frames: pick 1-2 moments per video. Timestamps must be copied exactly from that video's timeline entries.
 - keyword_clusters: 5-10 words or short phrases that recur across scripts, frequency is high/medium/low.`;

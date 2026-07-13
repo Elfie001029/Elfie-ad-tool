@@ -730,7 +730,7 @@ export default function Home() {
       <button
         onClick={e => { e.stopPropagation(); already ? null : addToShotList({ thumbnail, annotation, shootDirection, source, videoUrl: itemVideoUrl }); }}
         title={already ? 'Already in shot list' : 'Add to shot list'}
-        style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0, transition: 'background 0.12s, color 0.12s', background: already ? C.text : '#e4e6f0', color: already ? '#fff' : C.muted }}>
+        style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0, transition: 'background 0.12s, color 0.12s', background: already ? C.text : '#e4e6f0', color: already ? '#fff' : C.muted }}>
         {already ? '✓' : '+'}
       </button>
     );
@@ -773,7 +773,7 @@ export default function Home() {
               <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{shotNum(item.id)}</span>
             </div>
             <button onClick={e => { e.stopPropagation(); removeFromShotList(item.id); }}
-              style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(13,15,26,0.6)', border: 'none', color: '#fff', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              style={{ position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%', background: 'rgba(13,15,26,0.6)', border: 'none', color: '#fff', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
           {/* Note + URL */}
           <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -784,7 +784,7 @@ export default function Home() {
               placeholder="Add a note…"
               maxLength={200}
               rows={2}
-              style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 9px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, overflow: 'hidden' }} />
+              style={{ width: '100%', fontSize: 13, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 9px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, overflow: 'hidden' }} />
             {item.videoUrl && (
               <a href={item.videoUrl} target="_blank" rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -820,7 +820,7 @@ export default function Home() {
               {shot.thumbnail && <img src={shot.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
             </div>
           ))}
-          {extra > 0 && <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>+{extra}</span>}
+          {extra > 0 && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>+{extra}</span>}
         </div>
       );
     }
@@ -843,33 +843,33 @@ export default function Home() {
           {/* Header */}
           <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, background: '#fff' }}>
             {isExpanded && (
-              <button onClick={() => setShotListExpanded(false)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.textSub, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', flexShrink: 0 }}>← Back</button>
+              <button onClick={() => setShotListExpanded(false)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.textSub, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', flexShrink: 0 }}>← Back</button>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
               {isEditingTitle
                 ? <input autoFocus value={pdfTitle} onChange={e => setPdfTitle(e.target.value)}
                     onBlur={() => setIsEditingTitle(false)}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setIsEditingTitle(false); }}
-                    style={{ fontSize: 14, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit' }} />
-                : <p onClick={() => setIsEditingTitle(true)} title="Click to rename" style={{ fontSize: 14, fontWeight: 700, color: C.text, cursor: 'text', display: 'inline-block' }}>{pdfTitle}</p>
+                    style={{ fontSize: 15, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit' }} />
+                : <p onClick={() => setIsEditingTitle(true)} title="Click to rename" style={{ fontSize: 15, fontWeight: 700, color: C.text, cursor: 'text', display: 'inline-block' }}>{pdfTitle}</p>
               }
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'}</p>
+              <p style={{ fontSize: 13, color: C.muted, marginTop: 1 }}>{shotList.length} {shotList.length === 1 ? 'frame' : 'frames'}</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {!isExpanded && (
                 <button onClick={() => { setShotListExpanded(true); setShotListOpen(false); }} title="Full screen"
-                  style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted, fontSize: 14 }}>⤢</button>
+                  style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.muted, fontSize: 15 }}>⤢</button>
               )}
-              {shotList.length > 0 && <button onClick={() => setShotList([])} style={{ fontSize: 12, color: C.muted, background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>}
+              {shotList.length > 0 && <button onClick={() => setShotList([])} style={{ fontSize: 13, color: C.muted, background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>}
               {!isExpanded && <button onClick={() => setShotListOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>}
             </div>
           </div>
 
           {/* Brief notes */}
           <div style={{ padding: isExpanded ? '12px 80px' : '12px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: '#fff' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Brief notes</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Brief notes</p>
             <textarea value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Add context, brand notes, or directions for the CP..."
-              style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
+              style={{ width: '100%', fontSize: 13, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={2} />
           </div>
 
           {/* Scrollable content */}
@@ -880,7 +880,7 @@ export default function Home() {
               {/* Sticky bins — categories */}
               <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8f9fb', padding: '12px 80px', borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ marginBottom: sections.length > 0 ? 10 : 0 }}>
-                  <button onClick={addSection} style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
+                  <button onClick={addSection} style={{ fontSize: 13, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
                 </div>
                 {sections.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -900,34 +900,34 @@ export default function Home() {
                           {/* Header: drag | trash | name | chevron */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', cursor: 'pointer' }}
                             onClick={() => toggleSectionExpanded(section.id)}>
-                            <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, cursor: 'grab' }}
+                            <span style={{ color: C.muted, fontSize: 13, flexShrink: 0, cursor: 'grab' }}
                               draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }}
                               onClick={e => e.stopPropagation()}>⠿</span>
                             <button onClick={e => { e.stopPropagation(); deleteSection(section.id); }} title="Delete category"
-                              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0, opacity: 0.6 }}>
+                              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 14, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0, opacity: 0.6 }}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                               </svg>
                             </button>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               {editingSectionId === section.id
-                                ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
-                                : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
+                                ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 12, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                                : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 12, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
                                     {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
                                   </span>
                               }
                             </div>
-                            <span style={{ fontSize: 14, color: C.textSub, flexShrink: 0, fontWeight: 600 }}>{isOpen ? '▾' : '▸'}</span>
+                            <span style={{ fontSize: 15, color: C.textSub, flexShrink: 0, fontWeight: 600 }}>{isOpen ? '▾' : '▸'}</span>
                           </div>
                           {!isOpen && sectionShots.length > 0 && renderFilmstrip(sectionShots)}
-                          {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '4px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>}
+                          {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 12, color: C.mutedLight, textAlign: 'center', padding: '4px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>}
                           {isOpen && (
                             <div style={{ padding: '0 12px 12px' }}>
                               {sectionShots.length === 0
-                                ? <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '10px 0', fontStyle: 'italic' }}>Drop shots here</p>
+                                ? <p style={{ fontSize: 12, color: C.mutedLight, textAlign: 'center', padding: '10px 0', fontStyle: 'italic' }}>Drop shots here</p>
                                 : <>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 8 }}>{displayShots.map(s => renderShotCard(s))}</div>
-                                    {overflow > 0 && <p style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 8 }}>+{overflow} more in this category</p>}
+                                    {overflow > 0 && <p style={{ fontSize: 12, color: C.muted, textAlign: 'center', marginTop: 8 }}>+{overflow} more in this category</p>}
                                   </>
                               }
                             </div>
@@ -943,8 +943,8 @@ export default function Home() {
               <div style={{ padding: '16px 80px' }}>
                 {shotList.length === 0
                   ? <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
-                      <p style={{ fontSize: 12, color: C.muted }}>Click + on any captured frame to add it here.</p>
+                      <p style={{ fontSize: 15, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                      <p style={{ fontSize: 13, color: C.muted }}>Click + on any captured frame to add it here.</p>
                     </div>
                   : <>
                       {sections.length > 0 && (
@@ -964,12 +964,12 @@ export default function Home() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div>
-                  <button onClick={addSection} style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
+                  <button onClick={addSection} style={{ fontSize: 13, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add category</button>
                 </div>
                 {shotList.length === 0
                   ? <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
-                      <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
+                      <p style={{ fontSize: 15, fontWeight: 500, color: C.text, marginBottom: 4 }}>No frames yet</p>
+                      <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Click + on any captured frame to add it here.</p>
                     </div>
                   : <>
                       {sections.map((section, si) => {
@@ -984,29 +984,29 @@ export default function Home() {
                             onDrop={e => handleDropOnSection(e, section.id)}
                             style={{ border: `1.5px dashed ${isDragOver ? C.accent : color.border}`, borderRadius: 12, background: isDragOver ? C.accentLight : color.bg, transition: 'border-color 0.1s, background 0.1s', overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', cursor: 'pointer' }} onClick={() => toggleSectionExpanded(section.id)}>
-                              <span style={{ color: C.muted, fontSize: 12, flexShrink: 0, cursor: 'grab' }} draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }} onClick={e => e.stopPropagation()}>⠿</span>
+                              <span style={{ color: C.muted, fontSize: 13, flexShrink: 0, cursor: 'grab' }} draggable onDragStart={e => { e.stopPropagation(); handleDragStartSection(section.id); }} onClick={e => e.stopPropagation()}>⠿</span>
                               <button onClick={e => { e.stopPropagation(); deleteSection(section.id); }} title="Delete category"
-                                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0, opacity: 0.6 }}>
+                                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 14, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0, opacity: 0.6 }}>
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                   <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                                 </svg>
                               </button>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 {editingSectionId === section.id
-                                  ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
-                                  : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
+                                  ? <input autoFocus value={section.name} onChange={e => updateSectionName(section.id, e.target.value)} onBlur={() => setEditingSectionId(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingSectionId(null); }} onClick={e => e.stopPropagation()} style={{ fontSize: 12, fontWeight: 700, color: C.text, border: 'none', outline: 'none', background: 'transparent', width: '100%', fontFamily: 'inherit', textTransform: 'uppercase', letterSpacing: '0.06em' }} />
+                                  : <span onClick={e => { e.stopPropagation(); setEditingSectionId(section.id); }} style={{ fontSize: 12, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'text' }}>
                                       {section.name} <span style={{ fontWeight: 400, color: C.muted }}>({sectionShots.length})</span>
                                     </span>
                                 }
                               </div>
-                              <span style={{ fontSize: 14, color: C.textSub, flexShrink: 0, fontWeight: 600 }}>{isOpen ? '▾' : '▸'}</span>
+                              <span style={{ fontSize: 15, color: C.textSub, flexShrink: 0, fontWeight: 600 }}>{isOpen ? '▾' : '▸'}</span>
                             </div>
                             {!isOpen && sectionShots.length > 0 && renderFilmstrip(sectionShots)}
-                            {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '6px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>}
+                            {!isOpen && sectionShots.length === 0 && <p style={{ fontSize: 12, color: C.mutedLight, textAlign: 'center', padding: '6px 12px 12px', fontStyle: 'italic' }}>Drop shots here</p>}
                             {isOpen && (
                               <div style={{ padding: '0 12px 12px' }}>
                                 {renderShotsGrid(sectionShots)}
-                                {sectionShots.length === 0 && <p style={{ fontSize: 11, color: C.mutedLight, textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>Drop shots here</p>}
+                                {sectionShots.length === 0 && <p style={{ fontSize: 12, color: C.mutedLight, textAlign: 'center', padding: '12px 0', fontStyle: 'italic' }}>Drop shots here</p>}
                               </div>
                             )}
                           </div>
@@ -1032,7 +1032,7 @@ export default function Home() {
           {/* Footer */}
           <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#fff' }}>
             <button onClick={downloadPDF} disabled={pdfDownloading || shotList.length === 0}
-              style={{ width: '100%', background: pdfDownloading || shotList.length === 0 ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: pdfDownloading || shotList.length === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
+              style={{ width: '100%', background: pdfDownloading || shotList.length === 0 ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 15, fontWeight: 600, cursor: pdfDownloading || shotList.length === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
               {pdfDownloading ? 'Generating PDF...' : 'Download PDF'}
             </button>
           </div>
@@ -1049,16 +1049,16 @@ export default function Home() {
         <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 420, background: '#fff', borderLeft: `1px solid ${C.border}`, boxShadow: '0 0 40px rgba(0,0,0,0.12)', zIndex: 50, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s', transform: editorBriefOpen ? 'translateX(0)' : 'translateX(100%)' }}>
           <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Editor Brief</p>
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{brollLogic ? 'B-roll logic loaded from analysis' : 'Run an analysis first to load B-roll logic'}</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Editor Brief</p>
+              <p style={{ fontSize: 13, color: C.muted, marginTop: 1 }}>{brollLogic ? 'B-roll logic loaded from analysis' : 'Run an analysis first to load B-roll logic'}</p>
             </div>
             <button onClick={() => setEditorBriefOpen(false)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
             {brollLogic ? (
               <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}` }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>B-roll logic</p>
-                <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6, marginBottom: 12 }}>{brollLogic.summary}</p>
+                <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>B-roll logic</p>
+                <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6, marginBottom: 12 }}>{brollLogic.summary}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {brollLogic.rules?.map((rule, i) => {
                     const colors = TYPE_COLORS[rule.footage_type] || 'bg-gray-100 text-gray-700';
@@ -1076,13 +1076,13 @@ export default function Home() {
               </div>
             ) : (
               <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.surface }}>
-                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Run a single ad analysis or group analysis to load the B-roll pairing logic.</p>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Run a single ad analysis or group analysis to load the B-roll pairing logic.</p>
               </div>
             )}
             <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Script labeler</p>
-              <textarea value={editorScript} onChange={e => setEditorScript(e.target.value)} placeholder={"Paste your script here — one sentence or line per paragraph.\n\nAI will label each line with the footage type that fits best."} style={{ width: '100%', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={7} />
-              <button onClick={labelScript} disabled={labelingScript || !editorScript.trim()} style={{ width: '100%', background: labelingScript || !editorScript.trim() ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: labelingScript || !editorScript.trim() ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Script labeler</p>
+              <textarea value={editorScript} onChange={e => setEditorScript(e.target.value)} placeholder={"Paste your script here — one sentence or line per paragraph.\n\nAI will label each line with the footage type that fits best."} style={{ width: '100%', fontSize: 13, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, resize: 'none', outline: 'none', fontFamily: 'inherit' }} rows={7} />
+              <button onClick={labelScript} disabled={labelingScript || !editorScript.trim()} style={{ width: '100%', background: labelingScript || !editorScript.trim() ? C.mutedLight : C.text, color: '#fff', border: 'none', borderRadius: 12, padding: '10px 24px', fontSize: 15, fontWeight: 600, cursor: labelingScript || !editorScript.trim() ? 'not-allowed' : 'pointer', transition: 'background 0.12s' }}>
                 {labelingScript ? 'Labeling...' : 'Label script'}
               </button>
               {labeledScript?.length > 0 && (
@@ -1120,9 +1120,9 @@ export default function Home() {
         {/* Logo */}
         <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 14px', borderBottom: `1px solid ${C.border}`, gap: 10, flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, background: C.accent, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '-0.5px' }}>A</span>
+            <span style={{ color: '#fff', fontSize: 14, fontWeight: 800, letterSpacing: '-0.5px' }}>A</span>
           </div>
-          {!sidebarCollapsed && <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.4px', whiteSpace: 'nowrap' }}>Ad<span style={{ color: C.accent }}>Elf</span></span>}
+          {!sidebarCollapsed && <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.4px', whiteSpace: 'nowrap' }}>Ad<span style={{ color: C.accent }}>Elf</span></span>}
         </div>
 
         {/* New analysis button */}
@@ -1131,8 +1131,8 @@ export default function Home() {
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: sidebarCollapsed ? 8 : '8px 12px', cursor: 'pointer', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', transition: 'background 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.background = C.surfaceHover}
             onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-            <span style={{ fontSize: 16, color: C.accent, lineHeight: 1, flexShrink: 0 }}>+</span>
-            {!sidebarCollapsed && <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>New analysis</span>}
+            <span style={{ fontSize: 17, color: C.accent, lineHeight: 1, flexShrink: 0 }}>+</span>
+            {!sidebarCollapsed && <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>New analysis</span>}
           </button>
         </div>
 
@@ -1150,7 +1150,7 @@ export default function Home() {
           ) : (
             library.length === 0 ? (
               <div style={{ padding: '32px 8px', textAlign: 'center' }}>
-                <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Your library is empty.<br />Analyze an ad to get started.</p>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Your library is empty.<br />Analyze an ad to get started.</p>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, animation: 'slideIn 0.15s ease' }}>
@@ -1177,7 +1177,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div style={{ padding: '7px 8px 8px' }}>
-                        <p style={{ fontSize: 11, color: C.text, fontWeight: 500, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        <p style={{ fontSize: 12, color: C.text, fontWeight: 500, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                           {entry.hook ? `"${entry.hook}"` : '—'}
                         </p>
                         <p style={{ fontSize: 10, color: C.muted, marginTop: 3, fontFamily: C.mono }}>{formatDate(entry.savedAt)}</p>
@@ -1185,7 +1185,7 @@ export default function Home() {
                     </button>
                     <div className="card-overlay" style={{ position: 'absolute', top: 5, right: 5, opacity: 0, transition: 'opacity 0.15s', pointerEvents: 'none' }}>
                       <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id); }}
-                        style={{ pointerEvents: 'auto', width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, lineHeight: 1, cursor: 'pointer', backdropFilter: 'blur(2px)' }}
+                        style={{ pointerEvents: 'auto', width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, lineHeight: 1, cursor: 'pointer', backdropFilter: 'blur(2px)' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,0.8)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}>
                         ×
@@ -1201,10 +1201,10 @@ export default function Home() {
         {/* Collapse toggle */}
         <div style={{ padding: 10, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
           <button onClick={() => setSidebarCollapsed(p => !p)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: 8, background: 'transparent', border: 'none', padding: '6px 8px', borderRadius: 6, color: C.muted, fontSize: 12, cursor: 'pointer', transition: 'background 0.12s' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: 8, background: 'transparent', border: 'none', padding: '6px 8px', borderRadius: 6, color: C.muted, fontSize: 13, cursor: 'pointer', transition: 'background 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.background = C.surfaceHover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <span style={{ fontSize: 14, display: 'inline-block', transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>←</span>
+            <span style={{ fontSize: 15, display: 'inline-block', transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>←</span>
             {!sidebarCollapsed && <span>Collapse</span>}
           </button>
         </div>
@@ -1218,26 +1218,26 @@ export default function Home() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', animation: 'fadeUp 0.3s ease', overflowY: 'auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 40 }}>
               <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-1px', color: C.text, marginBottom: 8 }}>Let's strategize your way out!</h1>
-              <p style={{ fontSize: 15, color: C.muted }}>{isGroup ? 'Group analysis · find patterns across multiple ads' : 'Paste a video URL to analyze your ad'}</p>
+              <p style={{ fontSize: 16, color: C.muted }}>{isGroup ? 'Group analysis · find patterns across multiple ads' : 'Paste a video URL to analyze your ad'}</p>
             </div>
 
             <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {urls.map((url, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', animation: i > 1 ? 'fadeUp 0.2s ease' : undefined }}>
                   {isGroup && (
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: C.muted, flexShrink: 0 }}>{i + 1}</div>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: C.muted, flexShrink: 0 }}>{i + 1}</div>
                   )}
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '13px 16px', transition: 'border-color 0.15s, box-shadow 0.15s' }}
                     onFocus={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.boxShadow = `0 0 0 3px ${C.accentBorder}`; }}
                     onBlur={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; }}>
-                    <span style={{ fontSize: 14, flexShrink: 0 }}>🔗</span>
+                    <span style={{ fontSize: 15, flexShrink: 0 }}>🔗</span>
                     <input value={url}
                       onChange={e => { const n = [...urls]; n[i] = e.target.value; setUrls(n); }}
                       onFocus={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('focus', { bubbles: true }))}
                       onBlur={e => e.currentTarget.parentElement.dispatchEvent(new FocusEvent('blur', { bubbles: true }))}
                       onKeyDown={e => { if (e.key === 'Enter' && i === urls.length - 1 && urls.some(u => u.trim())) handleAnalyze(); }}
                       placeholder={i === 0 ? 'Paste a .mp4 URL from swipekit.app or foreplay.co…' : i === 1 ? 'Add another ad to compare… (optional)' : `Video URL ${i + 1}…`}
-                      style={{ flex: 1, fontSize: 13, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: C.mono }} />
+                      style={{ flex: 1, fontSize: 14, color: C.text, background: 'transparent', border: 'none', outline: 'none', fontFamily: C.mono }} />
                   </div>
                   {i >= 2 && (
                     <button onClick={() => setUrls(urls.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
@@ -1247,7 +1247,7 @@ export default function Home() {
 
               {urls.length < 6 && (
                 <button onClick={() => setUrls([...urls, ''])}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', background: 'transparent', border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: 9, color: C.muted, fontSize: 13, cursor: 'pointer', transition: 'border-color 0.12s, color 0.12s, background 0.12s' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', background: 'transparent', border: `1.5px dashed ${C.border}`, borderRadius: 10, padding: 9, color: C.muted, fontSize: 14, cursor: 'pointer', transition: 'border-color 0.12s, color 0.12s, background 0.12s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = C.accentLight; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; e.currentTarget.style.background = 'transparent'; }}>
                   <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
@@ -1256,20 +1256,20 @@ export default function Home() {
               )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px 0', opacity: 0.7 }}>
-                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, fontWeight: 500 }}>Context</span>
+                <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 500 }}>Context</span>
                 <input value={context} onChange={e => setContext(e.target.value)}
                   placeholder="Brand context, target audience… (optional)"
-                  style={{ flex: 1, fontSize: 12, color: C.textSub, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }} />
+                  style={{ flex: 1, fontSize: 13, color: C.textSub, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'inherit' }} />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 2 }}>
                 {isGroup && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 20, padding: '2px 8px' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 20, padding: '2px 8px' }}>
                     Group mode · {urls.filter(u => u.trim()).length} URLs
                   </span>
                 )}
                 <button onClick={handleAnalyze} disabled={!urls.some(u => u.trim()) || extractingFb}
-                  style={{ width: '100%', background: urls.some(u => u.trim()) ? C.accent : C.mutedLight, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 700, cursor: urls.some(u => u.trim()) && !extractingFb ? 'pointer' : 'not-allowed', transition: 'background 0.15s, transform 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  style={{ width: '100%', background: urls.some(u => u.trim()) ? C.accent : C.mutedLight, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 15, fontWeight: 700, cursor: urls.some(u => u.trim()) && !extractingFb ? 'pointer' : 'not-allowed', transition: 'background 0.15s, transform 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                   onMouseEnter={e => { if (urls.some(u => u.trim()) && !extractingFb) e.currentTarget.style.transform = 'scale(1.01)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
                   {extractingFb
@@ -1287,13 +1287,13 @@ export default function Home() {
             {/* Top bar */}
             <div style={{ height: 52, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0, background: '#fff' }}>
               <button onClick={goHome}
-                style={{ background: 'transparent', border: 'none', color: C.muted, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', transition: 'background 0.12s', flexShrink: 0 }}
+                style={{ background: 'transparent', border: 'none', color: C.muted, fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', transition: 'background 0.12s', flexShrink: 0 }}
                 onMouseEnter={e => e.currentTarget.style.background = C.surface}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 ← Back
               </button>
               <div style={{ width: 1, height: 18, background: C.border, flexShrink: 0 }} />
-              <div style={{ fontFamily: C.mono, fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              <div style={{ fontFamily: C.mono, fontSize: 13, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 {analysisType === 'single' ? videoUrl : `${groupUrls.filter(u => u).length} videos`}
                 {(analyzingVideo || groupRunning) && (
                   <span style={{ marginLeft: 10, display: 'inline-flex', alignItems: 'center', gap: 5, color: C.accent }}>
@@ -1303,13 +1303,13 @@ export default function Home() {
                 )}
               </div>
               <button onClick={() => setEditorBriefOpen(true)}
-                style={{ fontSize: 12, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, transition: 'background 0.12s' }}
+                style={{ fontSize: 13, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, transition: 'background 0.12s' }}
                 onMouseEnter={e => e.currentTarget.style.background = C.surface}
                 onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                 Editor Brief
               </button>
               <button onClick={() => setShotListOpen(true)}
-                style={{ fontSize: 12, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.12s' }}
+                style={{ fontSize: 13, border: `1px solid ${C.border}`, background: '#fff', color: C.textSub, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', flexShrink: 0, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, transition: 'background 0.12s' }}
                 onMouseEnter={e => e.currentTarget.style.background = C.surface}
                 onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                 Shot List
@@ -1328,11 +1328,11 @@ export default function Home() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
-                          <p style={{ fontSize: 14, color: C.muted }}>Analyzing video… this takes 1–2 minutes</p>
+                          <p style={{ fontSize: 15, color: C.muted }}>Analyzing video… this takes 1–2 minutes</p>
                         </div>
                       </div>
                     )}
-                    {videoError && <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 13, borderRadius: 12, padding: '12px 16px' }}>{videoError}</div>}
+                    {videoError && <div style={{ background: '#fef2f2', color: '#dc2626', fontSize: 14, borderRadius: 12, padding: '12px 16px' }}>{videoError}</div>}
                     {videoAnalysis && (() => {
                       // ── helpers scoped to render
                       const timeline = videoAnalysis.timeline || [];
@@ -1368,7 +1368,7 @@ export default function Home() {
                               ].map(s => (
                                 <div key={s.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
                                   <p style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{s.label}</p>
-                                  <p style={{ fontSize: 16, fontWeight: 600, color: C.text }}>{s.value}</p>
+                                  <p style={{ fontSize: 17, fontWeight: 600, color: C.text }}>{s.value}</p>
                                 </div>
                               ))}
                             </div>
@@ -1382,14 +1382,14 @@ export default function Home() {
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                 {/* Hook */}
                                 <div>
-                                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Hook</p>
+                                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Hook</p>
                                   <p style={{ fontSize: 20, fontWeight: 500, color: C.text, lineHeight: 1.35 }}>"{videoAnalysis.general?.hook?.copy}"</p>
                                 </div>
                                 {/* Opener */}
                                 <div>
-                                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opener</p>
+                                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opener</p>
                                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                                    <p style={{ fontSize: 14, color: C.textSub, lineHeight: 1.55, flex: 1 }}>{videoAnalysis.general?.hook?.visual}</p>
+                                    <p style={{ fontSize: 15, color: C.textSub, lineHeight: 1.55, flex: 1 }}>{videoAnalysis.general?.hook?.visual}</p>
                                     {openerFrame && (
                                       <div style={{ width: 52, flexShrink: 0, borderRadius: 8, overflow: 'hidden', cursor: 'pointer' }} onClick={() => jumpToTimestamp(videoAnalysis.general?.opener?.timestamp || '00:00:00')}>
                                         <img src={openerFrame} alt="Opener" style={{ width: '100%', display: 'block' }} />
@@ -1403,13 +1403,13 @@ export default function Home() {
                             {/* Filmstrip */}
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
                                   Frame by frame analysis
                                   {capturingFrames && <span style={{ marginLeft: 8, color: C.accent, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>capturing {Object.keys(capturedFrames).length}/{timeline.length}…</span>}
                                 </p>
                                 <button
                                   onClick={() => setFilmstripMode(m => m === 'strip' ? 'list' : 'strip')}
-                                  style={{ fontSize: 11, fontWeight: 500, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  style={{ fontSize: 12, fontWeight: 500, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
                                   {filmstripMode === 'strip' ? 'list view' : 'strip view'}
                                 </button>
                               </div>
@@ -1461,7 +1461,7 @@ export default function Home() {
                                                     width: 22, height: 22, borderRadius: '50%',
                                                     background: alreadyAdded ? 'rgba(219,39,119,0.9)' : 'rgba(255,255,255,0.85)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: 13, fontWeight: 700, lineHeight: 1,
+                                                    fontSize: 14, fontWeight: 700, lineHeight: 1,
                                                     color: alreadyAdded ? '#fff' : C.text,
                                                     cursor: alreadyAdded ? 'default' : 'pointer',
                                                     transition: 'background 0.12s',
@@ -1484,7 +1484,7 @@ export default function Home() {
                                     {/* Scroll arrow */}
                                     <button
                                       onClick={() => filmstripRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}
-                                      style={{ position: 'absolute', right: -14, top: '38%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.95)', border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 13, color: C.textSub, zIndex: 2 }}>
+                                      style={{ position: 'absolute', right: -14, top: '38%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.95)', border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, color: C.textSub, zIndex: 2 }}>
                                       ›
                                     </button>
                                   </div>
@@ -1499,7 +1499,7 @@ export default function Home() {
                                     {hoveredRow ? (
                                       <>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                          <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent }}>{hoveredRow.timestamp}</span>
+                                          <span style={{ fontFamily: C.mono, fontSize: 12, color: C.accent }}>{hoveredRow.timestamp}</span>
                                           {(() => {
                                             const section = getSectionForTimestamp(hoveredRow.timestamp);
                                             const sc = SECTION_COLORS[section];
@@ -1512,11 +1512,11 @@ export default function Home() {
                                             );
                                           })()}
                                         </div>
-                                        <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{hoveredRow.visual}</p>
-                                        {hoveredRow.copy && <p style={{ fontSize: 13, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredRow.copy}"</p>}
+                                        <p style={{ fontSize: 14, color: C.textSub, lineHeight: 1.5 }}>{hoveredRow.visual}</p>
+                                        {hoveredRow.copy && <p style={{ fontSize: 14, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredRow.copy}"</p>}
                                       </>
                                     ) : (
-                                      <p style={{ fontSize: 12, color: C.mutedLight, lineHeight: 1.5 }}>Hover over a frame to see the transcript, scene description, and footage type.</p>
+                                      <p style={{ fontSize: 13, color: C.mutedLight, lineHeight: 1.5 }}>Hover over a frame to see the transcript, scene description, and footage type.</p>
                                     )}
                                   </div>
                                 </>
@@ -1542,12 +1542,12 @@ export default function Home() {
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                            <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent, flexShrink: 0 }}>{row.timestamp}</span>
+                                            <span style={{ fontFamily: C.mono, fontSize: 12, color: C.accent, flexShrink: 0 }}>{row.timestamp}</span>
                                             {section && sc && <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: sc.light === 'bg-gray-50' ? '#f9fafb' : undefined, color: sc.bg, flexShrink: 0 }}>{section}</span>}
                                             <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: tc.bg, color: tc.color, flexShrink: 0 }}>{TYPE_LABELS[row.type] || row.type}</span>
                                           </div>
-                                          <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5, marginBottom: row.copy ? 3 : 0 }}>{row.visual}</p>
-                                          {row.copy && <p style={{ fontSize: 12, color: C.text, fontStyle: 'italic', lineHeight: 1.5 }}>"{row.copy}"</p>}
+                                          <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5, marginBottom: row.copy ? 3 : 0 }}>{row.visual}</p>
+                                          {row.copy && <p style={{ fontSize: 13, color: C.text, fontStyle: 'italic', lineHeight: 1.5 }}>"{row.copy}"</p>}
                                         </div>
                                         {frame && (
                                           <div style={{ flexShrink: 0, alignSelf: 'center' }} onClick={e => {
@@ -1572,23 +1572,23 @@ export default function Home() {
                             {/* Full script */}
                             {fullTranscript && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Full script</p>
-                                <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.8 }}>{fullTranscript}</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Full script</p>
+                                <p style={{ fontSize: 14, color: C.textSub, lineHeight: 1.8 }}>{fullTranscript}</p>
                               </div>
                             )}
 
                             {/* Value propositions */}
                             {videoAnalysis.general?.value_propositions?.length > 0 && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Value proposition</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Value proposition</p>
                                 <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                                   {videoAnalysis.general.value_propositions.map((vp, i) => (
                                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: i < videoAnalysis.general.value_propositions.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                                       <div style={{ padding: '12px 16px', borderRight: `1px solid ${C.border}`, background: '#fff' }}>
-                                        <p style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{vp.summary ?? vp}</p>
+                                        <p style={{ fontSize: 14, fontWeight: 500, color: C.text }}>{vp.summary ?? vp}</p>
                                       </div>
                                       <div style={{ padding: '12px 16px', background: C.surface }}>
-                                        <p style={{ fontSize: 13, color: C.textSub, fontStyle: vp.copy ? 'italic' : 'normal' }}>{vp.copy || '—'}</p>
+                                        <p style={{ fontSize: 14, color: C.textSub, fontStyle: vp.copy ? 'italic' : 'normal' }}>{vp.copy || '—'}</p>
                                       </div>
                                     </div>
                                   ))}
@@ -1599,9 +1599,9 @@ export default function Home() {
                             {/* Why this works */}
                             {videoAnalysis.general?.why_this_works && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Why this works</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Why this works</p>
                                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px' }}>
-                                  <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.8 }}>{videoAnalysis.general.why_this_works}</p>
+                                  <p style={{ fontSize: 14, color: C.textSub, lineHeight: 1.8 }}>{videoAnalysis.general.why_this_works}</p>
                                 </div>
                               </div>
                             )}
@@ -1609,7 +1609,7 @@ export default function Home() {
                             {/* Editor brief CTA */}
                             {videoAnalysis.broll_logic && (
                               <button onClick={() => setEditorBriefOpen(true)}
-                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.12s', fontFamily: 'inherit' }}
+                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 0.12s', fontFamily: 'inherit' }}
                                 onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
                                 onMouseLeave={e => e.currentTarget.style.background = C.surface}>
                                 Apply this editing logic to a script →
@@ -1639,14 +1639,14 @@ export default function Home() {
                       <div className="flex items-center justify-center py-32">
                         <div className="text-center">
                           <div style={{ width: 32, height: 32, border: `3px solid ${C.accentBorder}`, borderTop: `3px solid ${C.accent}`, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
-                          <p style={{ fontSize: 14, color: C.muted }}>
+                          <p style={{ fontSize: 15, color: C.muted }}>
                             {groupProgress?.stage === 'synthesis'
                               ? 'Finding patterns across ads…'
                               : groupProgress
                                 ? `Analyzing each ad in full… ${groupProgress.done}/${groupProgress.total} done`
                                 : 'Analyzing group…'}
                           </p>
-                          <p style={{ fontSize: 12, color: C.mutedLight, marginTop: 6 }}>
+                          <p style={{ fontSize: 13, color: C.mutedLight, marginTop: 6 }}>
                             {groupProgress?.stage === 'synthesis'
                               ? 'Comparing structures, talking points and copy across the group'
                               : 'Every ad gets a full breakdown first, then the group is compared'}
@@ -1714,7 +1714,7 @@ export default function Home() {
                                         } catch { setVideoError('Something went wrong.'); }
                                         finally { setAnalyzingVideo(false); }
                                       }}
-                                      style={{ width: '100%', fontSize: 11, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                      style={{ width: '100%', fontSize: 12, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
                                       Analyze →
                                     </button>
                                   </div>
@@ -1728,13 +1728,13 @@ export default function Home() {
                                 {groupResult.avg_duration && (
                                   <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
                                     <p style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>Avg. time</p>
-                                    <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{groupResult.avg_duration}</p>
+                                    <p style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{groupResult.avg_duration}</p>
                                   </div>
                                 )}
                                 {groupResult.avg_cuts != null && (
                                   <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
                                     <p style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>Avg. cuts</p>
-                                    <p style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{groupResult.avg_cuts}</p>
+                                    <p style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{groupResult.avg_cuts}</p>
                                   </div>
                                 )}
                               </div>
@@ -1744,24 +1744,42 @@ export default function Home() {
                           {/* ── RIGHT: scrollable analysis */}
                           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 28 }}>
 
+                            {/* Strongest patterns — the headline takeaways */}
+                            {groupResult.strongest_patterns?.length > 0 && (
+                              <div>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Strongest patterns</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {groupResult.strongest_patterns.map((p, i) => (
+                                    <div key={i} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 14 }}>
+                                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.text, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{i + 1}</div>
+                                      <div>
+                                        <p style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>{p.title}</p>
+                                        <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6 }}>{p.observation}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Keywords + Format */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                               {groupResult.keyword_clusters?.length > 0 && (
                                 <div>
-                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Keyword</p>
+                                  <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Keyword</p>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     {groupResult.keyword_clusters.map((k, i) => (
-                                      <p key={i} style={{ fontSize: k.frequency === 'high' ? 20 : k.frequency === 'medium' ? 16 : 13, fontWeight: k.frequency === 'high' ? 600 : 500, color: C.text, lineHeight: 1.4 }}>{k.word}</p>
+                                      <p key={i} style={{ fontSize: k.frequency === 'high' ? 21 : k.frequency === 'medium' ? 17 : 14, fontWeight: k.frequency === 'high' ? 600 : 500, color: C.text, lineHeight: 1.4 }}>{k.word}</p>
                                     ))}
                                   </div>
                                 </div>
                               )}
                               {groupResult.format?.length > 0 && (
                                 <div>
-                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Format</p>
+                                  <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Format</p>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     {groupResult.format.map((f, i) => (
-                                      <p key={i} style={{ fontSize: 16, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>{f}</p>
+                                      <p key={i} style={{ fontSize: 17, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>{f}</p>
                                     ))}
                                   </div>
                                 </div>
@@ -1771,14 +1789,14 @@ export default function Home() {
                             {/* Common hooks */}
                             {groupResult.common_hooks?.length > 0 && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Common line</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Common line</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                   {groupResult.common_hooks.map((h, i) => (
                                     <div key={i} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
-                                      <p style={{ fontSize: 16, fontWeight: 500, color: C.text, lineHeight: 1.4, marginBottom: 8 }}>"{h.copy}"</p>
+                                      <p style={{ fontSize: 17, fontWeight: 500, color: C.text, lineHeight: 1.4, marginBottom: 8 }}>"{h.copy}"</p>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ fontSize: 10, background: C.border, color: C.textSub, padding: '2px 8px', borderRadius: 20, fontWeight: 500 }}>Appears in {h.appears_in} ads</span>
-                                        <p style={{ fontSize: 11, color: C.muted }}>{h.strategy}</p>
+                                        <p style={{ fontSize: 12, color: C.muted }}>{h.strategy}</p>
                                       </div>
                                     </div>
                                   ))}
@@ -1789,7 +1807,7 @@ export default function Home() {
                             {/* Key talking points matrix */}
                             {groupResult.talking_points?.length > 0 && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Key talking points</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Key talking points</p>
                                 <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                                   {/* header row */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
@@ -1811,12 +1829,12 @@ export default function Home() {
                                           <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                               <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: cat.bg, color: cat.color, flexShrink: 0 }}>{cat.label}</span>
-                                              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{tp.title}</span>
+                                              <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{tp.title}</span>
                                             </div>
-                                            {tp.placement && <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>↳ {tp.placement}</p>}
+                                            {tp.placement && <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>↳ {tp.placement}</p>}
                                           </div>
                                           {filledUrls.map((_, vi) => (
-                                            <span key={vi} style={{ width: 30, textAlign: 'center', fontSize: 12, fontWeight: 700, color: present.has(vi) ? C.accent : C.mutedLight }}>
+                                            <span key={vi} style={{ width: 30, textAlign: 'center', fontSize: 13, fontWeight: 700, color: present.has(vi) ? C.accent : C.mutedLight }}>
                                               {present.has(vi) ? '✓' : '–'}
                                             </span>
                                           ))}
@@ -1827,7 +1845,7 @@ export default function Home() {
                                             {tp.appearances.map((a, ai) => (
                                               <div key={ai} style={{ display: 'flex', gap: 10, background: C.surface, borderRadius: 8, padding: '8px 12px' }}>
                                                 <span style={{ fontSize: 10, fontWeight: 700, color: C.accent, fontFamily: C.mono, flexShrink: 0, marginTop: 2 }}>V{(a.video_index ?? 0) + 1}</span>
-                                                <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>"{a.quote}"</p>
+                                                <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>"{a.quote}"</p>
                                               </div>
                                             ))}
                                           </div>
@@ -1849,7 +1867,7 @@ export default function Home() {
                               const hoveredSeg = hoveredStruct?.sections[structHover.sectionIdx] || null;
                               return (
                                 <div>
-                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
+                                  <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
 
                                   {/* legend */}
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginBottom: 12 }}>
@@ -1889,14 +1907,14 @@ export default function Home() {
                                   {/* hover detail */}
                                   <div style={{ marginTop: 8, minHeight: 34, background: C.surface, borderRadius: 10, padding: '8px 14px', border: `1px solid ${hoveredSeg ? C.accentBorder : C.border}`, transition: 'border-color 0.15s', display: 'flex', alignItems: 'center' }}>
                                     {hoveredSeg ? (
-                                      <p style={{ fontSize: 12, color: C.textSub }}>
+                                      <p style={{ fontSize: 13, color: C.textSub }}>
                                         <span style={{ fontFamily: C.mono, color: C.accent }}>V{structHover.videoIdx + 1}</span>
                                         {' · '}<span style={{ fontWeight: 600, color: C.text }}>{hoveredSeg.section}</span>
                                         {' · '}{secondsToTimestamp(hoveredSeg.start_s).slice(3)}–{secondsToTimestamp(hoveredSeg.end_s).slice(3)}
                                         {' · '}{Math.round(((hoveredSeg.end_s - hoveredSeg.start_s) / hoveredStruct.duration_s) * 100)}% of ad
                                       </p>
                                     ) : (
-                                      <p style={{ fontSize: 11, color: C.mutedLight }}>Hover a segment to compare the same section across ads.</p>
+                                      <p style={{ fontSize: 12, color: C.mutedLight }}>Hover a segment to compare the same section across ads.</p>
                                     )}
                                   </div>
 
@@ -1910,10 +1928,10 @@ export default function Home() {
                                           <div key={cs.section} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < consensus.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                                             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: sc.bg + '18', color: sc.bg, flexShrink: 0, marginTop: 1, whiteSpace: 'nowrap' }}>{cs.section}</span>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                              <p style={{ fontSize: 11, color: C.muted, marginBottom: note ? 3 : 0 }}>
+                                              <p style={{ fontSize: 12, color: C.muted, marginBottom: note ? 3 : 0 }}>
                                                 {cs.appears_in}/{cs.total} ads · starts ~{cs.avg_start_pct}% in · ~{cs.avg_len_pct}% of runtime
                                               </p>
-                                              {note && <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{note}</p>}
+                                              {note && <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{note}</p>}
                                             </div>
                                           </div>
                                         );
@@ -1923,28 +1941,13 @@ export default function Home() {
 
                                   {/* sequence pattern */}
                                   {groupResult.sequence_pattern && (
-                                    <p style={{ marginTop: 10, fontSize: 12, color: C.textSub, lineHeight: 1.6, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 10, padding: '10px 14px' }}>
+                                    <p style={{ marginTop: 10, fontSize: 13, color: C.textSub, lineHeight: 1.6, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 10, padding: '10px 14px' }}>
                                       {groupResult.sequence_pattern}
                                     </p>
                                   )}
                                 </div>
                               );
                             })()}
-
-                            {/* Visual trend */}
-                            {groupResult.visual_pattern && (
-                              <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Visual trend</p>
-                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-                                  {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].filter(i => i.value).map((item, i, arr) => (
-                                    <div key={item.label} style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                                      <p style={{ fontSize: 11, color: C.muted, width: 100, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
-                                      <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
 
                             {/* Per-video filmstrips */}
                             {videoAnalyses.map(va => {
@@ -1954,7 +1957,7 @@ export default function Home() {
                               const hoveredFrameData = hoveredIdx !== null ? va.frames[hoveredIdx] : null;
                               return (
                                 <div key={va.video_index}>
-                                  <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                                  <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
                                     Frame by frame analysis · Video {va.video_index + 1}
                                   </p>
 
@@ -1981,14 +1984,14 @@ export default function Home() {
                                                   <div style={{ width: 10, height: 10, border: `1.5px solid rgba(255,255,255,0.15)`, borderTop: `1.5px solid rgba(255,255,255,0.5)`, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                                                 </div>}
                                             {frame.is_starred && (
-                                              <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 13 }}>⭐</div>
+                                              <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 14 }}>⭐</div>
                                             )}
                                             {thumb && (
                                               <div style={{ position: 'absolute', bottom: 4, right: 4 }} onClick={e => {
                                                 e.stopPropagation();
                                                 if (!shotList.some(s => s.thumbnail === thumb)) addToShotList({ thumbnail: thumb, hqThumbnail: thumb, annotation: frame.visual, shootDirection: '', source: `Group V${va.video_index + 1} · ${frame.timestamp}`, videoUrl: vidUrl });
                                               }}>
-                                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: shotList.some(s => s.thumbnail === thumb) ? 'rgba(219,39,119,0.9)' : 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: shotList.some(s => s.thumbnail === thumb) ? '#fff' : C.text, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+                                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: shotList.some(s => s.thumbnail === thumb) ? 'rgba(219,39,119,0.9)' : 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: shotList.some(s => s.thumbnail === thumb) ? '#fff' : C.text, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
                                                   {shotList.some(s => s.thumbnail === thumb) ? '✓' : '+'}
                                                 </div>
                                               </div>
@@ -2010,15 +2013,15 @@ export default function Home() {
                                     {hoveredFrameData ? (
                                       <>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                          <span style={{ fontFamily: C.mono, fontSize: 11, color: C.accent }}>{hoveredFrameData.timestamp}</span>
+                                          <span style={{ fontFamily: C.mono, fontSize: 12, color: C.accent }}>{hoveredFrameData.timestamp}</span>
                                           {(() => { const tc = TYPE_COLORS_INLINE[hoveredFrameData.type] || { bg: '#f3f4f6', color: '#6b7280' }; return <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: tc.bg, color: tc.color }}>{TYPE_LABELS[hoveredFrameData.type] || hoveredFrameData.type}</span>; })()}
                                           {hoveredFrameData.is_starred && <span style={{ fontSize: 10 }}>⭐ {hoveredFrameData.why_starred}</span>}
                                         </div>
-                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{hoveredFrameData.visual}</p>
-                                        {hoveredFrameData.copy && <p style={{ fontSize: 12, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredFrameData.copy}"</p>}
+                                        <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{hoveredFrameData.visual}</p>
+                                        {hoveredFrameData.copy && <p style={{ fontSize: 13, color: C.text, fontWeight: 500, lineHeight: 1.5 }}>"{hoveredFrameData.copy}"</p>}
                                       </>
                                     ) : (
-                                      <p style={{ fontSize: 11, color: C.mutedLight }}>Hover a frame to see transcript and scene detail.</p>
+                                      <p style={{ fontSize: 12, color: C.mutedLight }}>Hover a frame to see transcript and scene detail.</p>
                                     )}
                                   </div>
                                 </div>
@@ -2028,15 +2031,15 @@ export default function Home() {
                             {/* Reusable copy templates */}
                             {groupResult.copy_templates?.length > 0 && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Reusable copy templates</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Reusable copy templates</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                   {groupResult.copy_templates.map((t, i) => (
                                     <div key={i} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
-                                      <p style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.5, marginBottom: (t.variants || []).length ? 8 : 0 }}>{t.template}</p>
+                                      <p style={{ fontSize: 15, fontWeight: 600, color: C.text, lineHeight: 1.5, marginBottom: (t.variants || []).length ? 8 : 0 }}>{t.template}</p>
                                       {(t.variants || []).map((v, vi) => (
                                         <div key={vi} style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                                           <span style={{ fontSize: 10, fontWeight: 700, color: C.accent, fontFamily: C.mono, flexShrink: 0, marginTop: 2 }}>V{(v.video_index ?? 0) + 1}</span>
-                                          <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>"{v.line}"</p>
+                                          <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>"{v.line}"</p>
                                         </div>
                                       ))}
                                     </div>
@@ -2045,17 +2048,40 @@ export default function Home() {
                               </div>
                             )}
 
+                            {/* Suggested product body script */}
+                            {groupResult.product_body_script?.script && (
+                              <div>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Suggested product body script</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '18px 20px' }}>
+                                  <p style={{ fontSize: 16, color: C.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{groupResult.product_body_script.script}</p>
+                                  <button
+                                    onClick={() => navigator.clipboard?.writeText(groupResult.product_body_script.script)}
+                                    style={{ marginTop: 12, fontSize: 13, fontWeight: 600, color: C.accent, background: C.accentLight, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    Copy script
+                                  </button>
+                                  {groupResult.product_body_script.based_on?.length > 0 && (
+                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                                      <p style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Derived from</p>
+                                      {groupResult.product_body_script.based_on.map((b, i) => (
+                                        <p key={i} style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6 }}>· {b}</p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Ad structure (legacy results without per-video structure data) */}
                             {!groupResult.structures?.length && groupResult.ad_structure_template?.length > 0 && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Ad structure</p>
                                 <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                                   {groupResult.ad_structure_template.map((s, i) => {
                                     const sc = SECTION_COLORS[s.section] || { bg: '#6b7280', light: 'bg-gray-50' };
                                     return (
                                       <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', borderBottom: i < groupResult.ad_structure_template.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                                         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: sc.bg + '18', color: sc.bg, flexShrink: 0, marginTop: 1 }}>{s.section}</span>
-                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{s.description}</p>
+                                        <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{s.description}</p>
                                       </div>
                                     );
                                   })}
@@ -2066,30 +2092,27 @@ export default function Home() {
                             {/* Talent pattern */}
                             {groupResult.talent_pattern && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Talent pattern</p>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Talent pattern</p>
                                 <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                                   {[{ label: 'Appearance', value: groupResult.talent_pattern.appearance }, { label: 'Clothing', value: groupResult.talent_pattern.clothing }, { label: 'Setting', value: groupResult.talent_pattern.setting }, { label: 'Energy', value: groupResult.talent_pattern.energy }].filter(i => i.value).map((item, i, arr) => (
                                     <div key={item.label} style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                                      <p style={{ fontSize: 11, color: C.muted, width: 80, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
-                                      <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
+                                      <p style={{ fontSize: 12, color: C.muted, width: 80, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
+                                      <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
                                     </div>
                                   ))}
                                 </div>
                               </div>
                             )}
 
-                            {/* Strongest patterns */}
-                            {groupResult.strongest_patterns?.length > 0 && (
+                            {/* Visual trend */}
+                            {groupResult.visual_pattern && (
                               <div>
-                                <p style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Strongest patterns</p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                  {groupResult.strongest_patterns.map((p, i) => (
-                                    <div key={i} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 14 }}>
-                                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.text, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{i + 1}</div>
-                                      <div>
-                                        <p style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>{p.title}</p>
-                                        <p style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6 }}>{p.observation}</p>
-                                      </div>
+                                <p style={{ fontSize: 12, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Visual trend</p>
+                                <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                                  {[{ label: 'Setting', value: groupResult.visual_pattern.setting }, { label: 'Text treatment', value: groupResult.visual_pattern.text_treatment }, { label: 'Color palette', value: groupResult.visual_pattern.color_palette }, { label: 'Editing pace', value: groupResult.visual_pattern.editing_pace }].filter(i => i.value).map((item, i, arr) => (
+                                    <div key={item.label} style={{ display: 'flex', gap: 16, padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                      <p style={{ fontSize: 12, color: C.muted, width: 100, flexShrink: 0, paddingTop: 1 }}>{item.label}</p>
+                                      <p style={{ fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>{item.value}</p>
                                     </div>
                                   ))}
                                 </div>
@@ -2099,7 +2122,7 @@ export default function Home() {
                             {/* Editor brief CTA */}
                             {groupResult.broll_logic && (
                               <button onClick={() => setEditorBriefOpen(true)}
-                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.12s' }}
+                                style={{ width: '100%', background: C.surface, color: C.accent, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '11px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.12s' }}
                                 onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
                                 onMouseLeave={e => e.currentTarget.style.background = C.surface}>
                                 Apply this editing logic to a script →
